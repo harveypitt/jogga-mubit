@@ -1,0 +1,28 @@
+app = "jogga-api"
+primary_region = "lhr"
+
+[env]
+JOGGA_LLM_MODEL = "deepseek/deepseek-v4.1-flash"
+JOGGA_LLM_REASONING = "on"
+
+[deploy]
+release_command = "alembic upgrade head"
+
+[http_service]
+internal_port = 8000
+force_https = true
+auto_stop_machines = "stop"
+auto_start_machines = true
+min_machines_running = 0
+
+  [[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/health"
+
+[[vm]]
+memory = "512mb"
+cpu_kind = "shared"
+cpus = 1

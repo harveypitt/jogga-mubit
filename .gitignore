@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+
+# Env / secrets
+.env
+
+# OS
+.DS_Store
+
+# Voice models (downloaded via ios/scripts/fetch_voice_models.sh)
+ios/Vendor/
+ios/Jogga/VoiceModels/

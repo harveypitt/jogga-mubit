@@ -1,0 +1,24 @@
+{
+  "originHash" : "a00c9063c645c0546aabb6a0f1bcda33eaeb49ac8b161776dd90f4c2aa006248",
+  "pins" : [
+    {
+      "identity" : "onnxruntime-swift-package-manager",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/microsoft/onnxruntime-swift-package-manager",
+      "state" : {
+        "revision" : "bbc428e168a0374eb7d0503cdb7c73fdc1d99751",
+        "version" : "1.19.2"
+      }
+    },
+    {
+      "identity" : "posthog-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/PostHog/posthog-ios",
+      "state" : {
+        "revision" : "c99f607d81549d5034a9ccd093ccb07fea21f642",
+        "version" : "3.84.1"
+      }
+    }
+  ],
+  "version" : 3
+}

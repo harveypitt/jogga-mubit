@@ -1,0 +1,137 @@
+name: Jogga
+options:
+  bundleIdPrefix: co.aliveindustries
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "17"
+packages:
+  PostHog:
+    url: https://github.com/PostHog/posthog-ios
+    exactVersion: 3.84.1
+  ONNXRuntime:
+    url: https://github.com/microsoft/onnxruntime-swift-package-manager
+    exactVersion: 1.19.2
+schemes:
+  Jogga:
+    build:
+      targets:
+        Jogga: all
+        JoggaTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - JoggaTests
+targets:
+  Jogga:
+    type: application
+    platform: iOS
+    sources:
+      - path: Jogga
+        excludes: ["VoiceModels/**"]
+      - path: Shared
+      - path: Jogga/VoiceModels
+        type: folder
+        optional: true
+        buildPhase: resources
+    dependencies:
+      - target: JoggaWidgets
+        embed: true
+      - framework: Vendor/llama.xcframework
+        embed: true
+        codeSign: true
+      - package: ONNXRuntime
+        product: onnxruntime
+      - package: PostHog
+        product: PostHog
+    postBuildScripts:
+      # onnxruntime.framework ships an Info.plist without MinimumOSVersion;
+      # patch it after Embed Frameworks and re-sign before the app's CodeSign.
+      - name: Patch onnxruntime MinimumOSVersion
+        basedOnDependencyAnalysis: false
+        runOnlyForDeploymentPostprocessing: false
+        script: |
+          set -e
+          FW="$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/onnxruntime.framework"
+          [ -d "$FW" ] || { echo "onnxruntime.framework not present, skipping"; exit 0; }
+          /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string $IPHONEOS_DEPLOYMENT_TARGET" \
+            "$FW/Info.plist" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion $IPHONEOS_DEPLOYMENT_TARGET" \
+            "$FW/Info.plist"
+          if [ "$CODE_SIGNING_ALLOWED" = "YES" ] && [ -n "$EXPANDED_CODE_SIGN_IDENTITY" ]; then
+            codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" \
+              --preserve-metadata=identifier,flags $OTHER_CODE_SIGN_FLAGS "$FW"
+          fi
+    info:
+      path: Jogga/Info.plist
+      properties:
+        CFBundleDisplayName: Jogga
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSSupportsLiveActivities: true
+        UILaunchScreen: {}
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        UIRequiresFullScreen: YES
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSLocationWhenInUseUsageDescription: "Jogga uses your location to map and measure your runs."
+        UIBackgroundModes: [location, audio]
+        ITSAppUsesNonExemptEncryption: NO
+        JOGGA_API_URL: $(JOGGA_API_URL)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.aliveindustries.jogga
+        TARGETED_DEVICE_FAMILY: "1"
+        DEVELOPMENT_TEAM: 32NQ6XTXFN
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Jogga/Jogga.entitlements
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": NO
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        JOGGA_API_URL: "http://localhost:8000"
+        SWIFT_EMIT_LOC_STRINGS: YES
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      configs:
+        Release:
+          JOGGA_API_URL: "https://jogga-api.fly.dev"
+
+  JoggaWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: JoggaWidgets
+      - path: Shared
+    info:
+      path: JoggaWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Jogga
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.aliveindustries.jogga.widgets
+        DEVELOPMENT_TEAM: 32NQ6XTXFN
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": NO
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  JoggaTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: JoggaTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: co.aliveindustries.jogga.tests
+        CODE_SIGNING_ALLOWED: NO
+    dependencies:
+      - target: Jogga

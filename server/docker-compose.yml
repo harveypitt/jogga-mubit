@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: jogga
+      POSTGRES_PASSWORD: jogga
+      POSTGRES_DB: jogga
+    ports:
+      - "5432:5432"
+    volumes:
+      - jogga-pgdata:/var/lib/postgresql/data
+volumes:
+  jogga-pgdata:
