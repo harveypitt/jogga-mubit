@@ -42,6 +42,10 @@ else:
     OPENROUTER_KEY_MALFORMED = False
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MUBIT_API_KEY = (os.environ.get("MUBIT_API_KEY") or "").strip() or None
+MUBIT_URL = os.environ.get("JOGGA_MUBIT_URL") or (
+    "https://api.mubit.ai/compat/openrouter/v1/chat/completions"
+)
 LLM_MODEL = os.environ.get("JOGGA_LLM_MODEL", "deepseek/deepseek-v4.1-flash")
 LLM_MAX_TOKENS = int(os.environ.get("JOGGA_LLM_MAX_TOKENS") or 20000)
 _raw_reasoning = (os.environ.get("JOGGA_LLM_REASONING") or "").strip().lower()

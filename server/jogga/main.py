@@ -5,7 +5,7 @@ import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -162,7 +162,7 @@ def _run_out(run: Run) -> RunOut:
         splits=[Split.model_validate(s) for s in run.splits],
         efforts=run.efforts,
         source=run.source,
-        mode=run.mode,
+        mode=cast(Literal["plan", "race", "free"] | None, run.mode),
         external_id=run.external_id,
     )
 

@@ -54,6 +54,10 @@ JOGGA_DEV_AUTH=1 uvicorn jogga.main:app --port 8000
   ("" | on | off; anything else is ignored with a startup warning),
   `JOGGA_LLM_TIMEOUT_S` (default 40), `JOGGA_LLM_TOTAL_TIMEOUT_S` (default 50),
   `JOGGA_LLM_ATTEMPTS` (default 2), and `JOGGA_LLM_TEMPERATURE` (default 0.2).
+- `MUBIT_API_KEY` (optional) routes coach requests through Mubit instead of
+  OpenRouter directly; configure the OpenRouter key in the Mubit console.
+- `JOGGA_MUBIT_URL` (optional) overrides Mubit’s OpenAI-compatible completion
+  URL, which defaults to `https://api.mubit.ai/compat/openrouter/v1/chat/completions`.
 - `POSTHOG_PROJECT_TOKEN` (optional) enables PostHog error tracking and AI
   observability of coach generations (prompt packet + response; the packet
   contains no GPS, heart-rate or HealthKit data); `POSTHOG_HOST` defaults to

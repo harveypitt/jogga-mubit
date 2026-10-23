@@ -225,13 +225,14 @@ def _feedback(
 
 @dataclass
 class LLMResult:
-    """Assistant text plus OpenRouter usage telemetry."""
+    """Assistant text plus provider usage telemetry."""
 
     text: str
     prompt_tokens: int | None
     completion_tokens: int | None
     cost_usd: float | None
     generation_id: str | None
+    request_id: str | None = None
 
 
 def _capture_generation(
@@ -290,12 +291,19 @@ class LLMClient(Protocol):
 
 
 class OpenRouterClient:
-    """OpenAI-compatible chat completions via OpenRouter."""
+    """OpenAI-compatible chat completions via OpenRouter or Mubit."""
 
-    def __init__(self, api_key: str, model: str, http: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        http: httpx.AsyncClient | None = None,
+        url: str | None = None,
+    ) -> None:
         self._api_key = api_key
         self._model = model
         self._http = http
+        self._url = url or config.OPENROUTER_URL
 
     async def complete(self, system: str, user: str) -> LLMResult:
         if self._http is not None:
@@ -305,7 +313,7 @@ class OpenRouterClient:
 
     async def _complete(self, http: httpx.AsyncClient, system: str, user: str) -> LLMResult:
         resp = await http.post(
-            config.OPENROUTER_URL,
+            self._url,
             headers={
                 "Authorization": f"Bearer {self._api_key}",
                 "X-OpenRouter-Title": "Jogga",
@@ -330,6 +338,7 @@ class OpenRouterClient:
             completion_tokens=usage.get("completion_tokens"),
             cost_usd=float(cost) if isinstance(cost, int | float) else None,
             generation_id=generation_id if isinstance(generation_id, str) else None,
+            request_id=resp.headers.get("x-middleware-request-id"),
         )
 
 
@@ -414,8 +423,13 @@ async def coach_run(
         .limit(1)
     )
 
-    if llm_client is None and config.OPENROUTER_API_KEY:
-        llm_client = OpenRouterClient(config.OPENROUTER_API_KEY, config.LLM_MODEL)
+    if llm_client is None:
+        if config.MUBIT_API_KEY:
+            llm_client = OpenRouterClient(
+                config.MUBIT_API_KEY, config.LLM_MODEL, url=config.MUBIT_URL
+            )
+        elif config.OPENROUTER_API_KEY:
+            llm_client = OpenRouterClient(config.OPENROUTER_API_KEY, config.LLM_MODEL)
 
     output: CoachOutput | None = None
     source = "heuristic"
@@ -475,7 +489,8 @@ async def coach_run(
             generation_id = result.generation_id
             latency_ms = int(round((time.monotonic() - started) * 1000))
             logger.info(
-                "coach llm ok run=%s model=%s tokens=%s/%s cost=$%.4f latency=%dms gen=%s",
+                "coach llm ok run=%s model=%s tokens=%s/%s cost=$%.4f latency=%dms "
+                "gen=%s mubit=%s",
                 run.id,
                 model,
                 prompt_tokens,
@@ -483,11 +498,12 @@ async def coach_run(
                 cost_usd or 0.0,
                 latency_ms,
                 generation_id,
+                result.request_id,
             )
             break
         if latency_ms is None and error is not None:
             latency_ms = int(round((time.monotonic() - started) * 1000))
-    else:
+    elif not config.MUBIT_API_KEY and not config.OPENROUTER_API_KEY:
         error = "malformed api key" if config.OPENROUTER_KEY_MALFORMED else "no api key"
 
     existing = await db.get(CoachNote, run.id)

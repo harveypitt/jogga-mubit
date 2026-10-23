@@ -9,6 +9,8 @@ from typing import Any
 os.environ["DATABASE_URL"] = "postgresql+asyncpg://localhost:5432/jogga_test"
 os.environ["JOGGA_DEV_AUTH"] = "1"
 os.environ.pop("OPENROUTER_API_KEY", None)
+os.environ.pop("MUBIT_API_KEY", None)
+os.environ.pop("JOGGA_MUBIT_URL", None)
 
 import pytest_asyncio  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402

@@ -96,6 +96,7 @@ async def test_request_shape() -> None:
     assert out.completion_tokens == 120
     assert out.cost_usd == 0.0042
     assert out.generation_id == "gen-123"
+    assert out.request_id is None
     assert seen["url"] == config.OPENROUTER_URL
     assert seen["auth"] == "Bearer test-key"
     assert seen["title"] == "Jogga"
@@ -115,6 +116,28 @@ async def test_request_shape() -> None:
         {"role": "system", "content": "SYS"},
         {"role": "user", "content": "PKT"},
     ]
+
+
+async def test_mubit_url_and_request_id() -> None:
+    seen: dict[str, str] = {}
+    url = "https://api.mubit.ai/compat/openrouter/v1/chat/completions"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["auth"] = request.headers["authorization"]
+        return httpx.Response(
+            200,
+            headers={"x-middleware-request-id": "mreq_test"},
+            json={"choices": [{"message": {"content": json.dumps(VALID_OUTPUT)}}]},
+        )
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    client = OpenRouterClient("mbt-test-key", "model", http=http, url=url)
+    out = await client.complete("SYS", "PKT")
+    await http.aclose()
+
+    assert seen == {"url": url, "auth": "Bearer mbt-test-key"}
+    assert out.request_id == "mreq_test"
 
 
 def test_request_body_reasoning(monkeypatch: Any) -> None:
@@ -507,7 +530,53 @@ async def test_server_error_falls_back(session: AsyncSession, user: User) -> Non
     assert note.packet is not None
 
 
-async def test_no_key_path(session: AsyncSession, user: User) -> None:
+async def test_mubit_key_uses_mubit_client(
+    session: AsyncSession, user: User, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(config, "MUBIT_API_KEY", "mbt-test-key")
+    monkeypatch.setattr(config, "MUBIT_URL", "https://mubit.example/chat/completions")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", None)
+    monkeypatch.setattr(config, "OPENROUTER_KEY_MALFORMED", True)
+    selected: dict[str, str | None] = {}
+
+    class FakeClient:
+        def __init__(
+            self,
+            api_key: str,
+            model: str,
+            http: httpx.AsyncClient | None = None,
+            url: str | None = None,
+        ) -> None:
+            selected.update(api_key=api_key, model=model, url=url)
+
+        async def complete(self, system: str, user: str) -> LLMResult:
+            return LLMResult(
+                text=json.dumps(VALID_OUTPUT),
+                prompt_tokens=None,
+                completion_tokens=None,
+                cost_usd=None,
+                generation_id=None,
+            )
+
+    monkeypatch.setattr("jogga.coach.OpenRouterClient", FakeClient)
+    run = _run(user.id)
+    session.add(run)
+    await session.flush()
+
+    note = await coach_run(session, run)
+
+    assert note.source == "llm"
+    assert selected == {
+        "api_key": "mbt-test-key",
+        "model": config.LLM_MODEL,
+        "url": config.MUBIT_URL,
+    }
+
+
+async def test_no_key_path(session: AsyncSession, user: User, monkeypatch: Any) -> None:
+    monkeypatch.setattr(config, "MUBIT_API_KEY", None)
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", None)
+    monkeypatch.setattr(config, "OPENROUTER_KEY_MALFORMED", False)
     run = _run(user.id)
     session.add(run)
     await session.flush()
