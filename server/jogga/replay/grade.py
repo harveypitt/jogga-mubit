@@ -85,12 +85,13 @@ def grade(packet_json: str, note: dict[str, Any], source: str) -> dict[str, bool
         lengths_ok &= all(_words(str(nxt.get(k) or "")) <= n for k, n in NEXT_WORD_LIMITS.items())
         lengths_ok &= _words(str((note.get("frequency") or {}).get("note") or "")) <= 25
         checks["length_limits"] = lengths_ok
-        joined = " ".join(_texts(note)).lower()
+        raw = " ".join(_texts(note))
+        joined = raw.lower()
         checks["tone_rules"] = not (
             any(p in joined for p in BANNED)
             or "!" in joined
             or "—" in joined
-            or re.search(r"\bgap\b", joined) is not None
+            or re.search(r"\bGAP\b", raw) is not None
         )
     else:
         checks["length_limits"] = None

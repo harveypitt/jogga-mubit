@@ -64,6 +64,21 @@ async def _ensure_db(url: str) -> None:
     await admin.dispose()
 
 
+def regrade(out: Path) -> None:
+    """Re-grade saved notes without calling the coach again."""
+    rows = [json.loads(line) for line in (out / "notes.jsonl").read_text().splitlines()]
+    previous = json.loads((out / "summary.json").read_text())
+    for row in rows:
+        row["checks"] = grade(json.dumps(row["packet"]), row["note"], row["source"])
+    with (out / "notes.jsonl").open("w") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+    summary = _summary(rows, previous["export"], previous["coach"])
+    summary["model"] = previous["model"]
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(json.dumps(summary["checks"], indent=2))
+
+
 async def replay(args: argparse.Namespace) -> None:
     runs, counts = load_export(args.export)
     if args.limit:
@@ -163,13 +178,20 @@ def _summary(rows: list[dict[str, Any]], counts: dict[str, int], coach: str) -> 
 
 def main() -> None:
     p = argparse.ArgumentParser(prog="python -m jogga.replay")
-    p.add_argument("--export", type=Path, required=True, help="unzipped Strava export folder")
+    p.add_argument("--export", type=Path, help="unzipped Strava export folder")
     p.add_argument("--coach", choices=["heuristic", "openrouter", "mubit"], default="heuristic")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--db", default=DEFAULT_DB, help="throwaway database (dropped and recreated)")
     p.add_argument("--limit", type=int, default=0, help="only the first N runs")
     p.add_argument("--target", type=_target, action="append", default=[], help="e.g. 5k=25:00")
-    asyncio.run(replay(p.parse_args()))
+    p.add_argument("--regrade", action="store_true", help="re-grade --out without coaching")
+    args = p.parse_args()
+    if args.regrade:
+        regrade(args.out)
+    elif args.export is None:
+        p.error("--export is required unless --regrade")
+    else:
+        asyncio.run(replay(args))
 
 
 main()

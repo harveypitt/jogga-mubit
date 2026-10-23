@@ -345,3 +345,12 @@ def test_tone_rules_reject_exclamation_and_em_dash(text: str) -> None:
 
 def test_tone_rules_accept_plain_language() -> None:
     assert _grade(source="llm")["tone_rules"] is True
+
+
+def test_tone_rules_flag_gap_acronym_but_not_the_word_gap() -> None:
+    note = _note()
+    note["work_on"] = "Close the gap to your 5k best with easy running."
+    assert _grade(source="llm", note=note)["tone_rules"] is True
+
+    note["work_on"] = "Your GAP was 5:40/km."
+    assert _grade(source="llm", note=note)["tone_rules"] is False
