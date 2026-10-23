@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from jogga.replay.__main__ import _forecast_scores
 from jogga.replay.grade import grade
 from jogga.replay.strava import load_export, parse_gpx, route_run
 
@@ -345,6 +346,23 @@ def test_tone_rules_reject_exclamation_and_em_dash(text: str) -> None:
 
 def test_tone_rules_accept_plain_language() -> None:
     assert _grade(source="llm")["tone_rules"] is True
+
+
+def test_forecast_scores_compare_coach_and_baselines() -> None:
+    rows = [
+        {"km": 4.0, "pace_s": 360, "note": {"forecast": {"km": 5.0, "pace": 330}}},
+        {"km": 5.0, "pace_s": 300, "note": {"forecast": {"km": 6.0, "pace": 270}}},
+        {"km": 4.0, "pace_s": 390, "note": {"forecast": {"km": 4.0, "pace": 360}}},
+    ]
+
+    assert _forecast_scores(rows) == {
+        "n": 2,
+        "mae": {
+            "coach": {"km": 1.0, "pace_s": 75.0},
+            "last_run": {"km": 1.0, "pace_s": 75.0},
+            "median_last_5": {"km": 0.75, "pace_s": 60.0},
+        },
+    }
 
 
 def test_tone_rules_flag_gap_acronym_but_not_the_word_gap() -> None:

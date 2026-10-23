@@ -27,6 +27,7 @@ VALID_COACH_OUTPUT = {
         "why": "Build your base.",
     },
     "frequency": {"runs_per_week": 3, "note": "Three runs per week."},
+    "forecast": {"km": 4.0, "pace": "6:00"},
 }
 
 
@@ -258,7 +259,8 @@ def test_parse_coach_output_wrapped() -> None:
     out = parse_coach_output(
         'sure! {"went_well":"w","work_on":"x","result":"r",'
         '"next":{"kind":"easy","km":5.0,"pace":"5:20","detail":"d","why":"w"},'
-        '"frequency":{"runs_per_week":3,"note":"n"}}',
+        '"frequency":{"runs_per_week":3,"note":"n"},'
+        '"forecast":{"km":4.0,"pace":"6:00"}}',
         "even",
     )
     assert out.pacing == "even" and out.next.pace == 320

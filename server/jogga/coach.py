@@ -23,6 +23,7 @@ from .schemas import (
     STANDARD_DISTANCES,
     CoachOutput,
     DistanceStats,
+    Forecast,
     Frequency,
     LLMCoachOutput,
     NextRun,
@@ -386,6 +387,11 @@ def parse_coach_output(text: str, pacing: Pacing) -> CoachOutput:
         raise ValueError(f"pace {pace} s/km out of range")
     if not 0 < llm.next.km <= 50:
         raise ValueError(f"km {llm.next.km} out of range")
+    forecast_pace = parse_pace(llm.forecast.pace)
+    if not 120 <= forecast_pace <= 1200:
+        raise ValueError(f"forecast pace {forecast_pace} s/km out of range")
+    if not 0 < llm.forecast.km <= 50:
+        raise ValueError(f"forecast km {llm.forecast.km} out of range")
     went_well = _clean_text(llm.went_well)
     work_on = _clean_text(llm.work_on)
     result = _clean_text(llm.result)
@@ -406,6 +412,7 @@ def parse_coach_output(text: str, pacing: Pacing) -> CoachOutput:
         went_well=went_well,
         work_on=work_on,
         result=result,
+        forecast=Forecast(km=llm.forecast.km, pace=forecast_pace),
     )
 
 

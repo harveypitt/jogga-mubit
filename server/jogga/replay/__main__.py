@@ -8,6 +8,7 @@ insert the coach runs exactly as in production, so it only ever sees earlier run
 import argparse
 import asyncio
 import json
+import statistics
 import uuid
 from collections import defaultdict
 from pathlib import Path
@@ -129,6 +130,7 @@ async def replay(args: argparse.Namespace) -> None:
                 "external_id": r.external_id,
                 "date": r.started_at.isoformat(),
                 "km": round(r.distance_m / 1000.0, 2),
+                "pace_s": round(r.moving_s / (r.distance_m / 1000.0), 1),
                 "from_route": r.from_route,
                 "source": note.source,
                 "model": note.model,
@@ -164,6 +166,7 @@ def _summary(rows: list[dict[str, Any]], counts: dict[str, int], coach: str) -> 
             if v is not None:
                 tally[k][0] += int(v)
                 tally[k][1] += 1
+    summary_forecast = _forecast_scores(rows)
     latencies = [r["latency_ms"] for r in rows if r["source"] == "llm" and r["latency_ms"]]
     return {
         "coach": coach,
@@ -171,8 +174,44 @@ def _summary(rows: list[dict[str, Any]], counts: dict[str, int], coach: str) -> 
         "export": counts,
         "notes": len(rows),
         "checks": {k: {"pass": p, "of": n, "rate": round(p / n, 3)} for k, (p, n) in tally.items()},
+        "forecast": summary_forecast,
         "llm_latency_ms_median": sorted(latencies)[len(latencies) // 2] if latencies else None,
         "cost_usd": round(sum(r["cost_usd"] or 0.0 for r in rows), 4),
+    }
+
+
+def _forecast_scores(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Mean absolute error of each forecast against the run actually logged next.
+
+    The coach's own forecast is compared with two baselines that need no model:
+    repeat the last run, and the median of the last five runs.
+    """
+    errors: dict[str, dict[str, list[float]]] = defaultdict(lambda: {"km": [], "pace_s": []})
+    for i, row in enumerate(rows[:-1]):
+        actual = rows[i + 1]
+        fc = row["note"].get("forecast")
+        if not fc or "pace_s" not in actual:
+            continue
+        history = rows[max(0, i - 4) : i + 1]
+        guesses = {
+            "coach": (fc["km"], fc["pace"]),
+            "last_run": (row["km"], row["pace_s"]),
+            "median_last_5": (
+                statistics.median(h["km"] for h in history),
+                statistics.median(h["pace_s"] for h in history),
+            ),
+        }
+        for name, (km, pace) in guesses.items():
+            errors[name]["km"].append(abs(km - actual["km"]))
+            errors[name]["pace_s"].append(abs(pace - actual["pace_s"]))
+    if not errors:
+        return None
+    return {
+        "n": len(errors["coach"]["km"]),
+        "mae": {
+            name: {k: round(statistics.mean(v), 2) for k, v in e.items()}
+            for name, e in errors.items()
+        },
     }
 
 
@@ -194,4 +233,5 @@ def main() -> None:
         asyncio.run(replay(args))
 
 
-main()
+if __name__ == "__main__":
+    main()

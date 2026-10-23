@@ -76,6 +76,25 @@
           "note"
         ],
         "additionalProperties": false
+      },
+      "forecast": {
+        "type": "object",
+        "description": "Your prediction of what this runner will actually do on their next run, judged from their own history (`recent`, `wk`, `hist.rest_d`), not from what you prescribed in `next`. It is scored against the run they really log next.",
+        "properties": {
+          "km": {
+            "type": "number",
+            "description": "The distance in km you expect them to actually run next time, based on the distances they usually choose."
+          },
+          "pace": {
+            "type": "string",
+            "description": "The average pace you expect for that run, as \"m:ss\" (never a range), allowing for their recent form, how often they run easy, and any trend in `recent`. Just the time, no units."
+          }
+        },
+        "required": [
+          "km",
+          "pace"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
@@ -83,7 +102,8 @@
       "work_on",
       "result",
       "next",
-      "frequency"
+      "frequency",
+      "forecast"
     ],
     "additionalProperties": false
   }

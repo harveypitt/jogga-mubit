@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +20,8 @@ from jogga.coach import (
     parse_coach_output,
     request_body,
 )
-from jogga.models import Run, User
+from jogga.models import CoachNote, Run, User
+from jogga.schemas import Forecast
 from tests.conftest import run_payload
 
 VALID_OUTPUT = {
@@ -34,6 +36,7 @@ VALID_OUTPUT = {
         "why": "Base.",
     },
     "frequency": {"runs_per_week": 3, "note": "Three a week."},
+    "forecast": {"km": 4.0, "pace": "6:00"},
 }
 
 
@@ -65,6 +68,27 @@ def _client(handler: Any) -> tuple[OpenRouterClient, httpx.AsyncClient]:  # noqa
     transport = httpx.MockTransport(handler)
     http = httpx.AsyncClient(transport=transport)
     return OpenRouterClient("test-key", "anthropic/claude-sonnet-4.5", http=http), http
+
+
+def _text_client(text: str) -> Any:
+    class TextClient:
+        async def complete(self, system: str, user: str) -> LLMResult:
+            return LLMResult(
+                text=text,
+                prompt_tokens=None,
+                completion_tokens=None,
+                cost_usd=None,
+                generation_id=None,
+            )
+
+    return TextClient()
+
+
+async def _coach_with_text(session: AsyncSession, user: User, text: str) -> CoachNote:
+    run = _run(user.id)
+    session.add(run)
+    await session.flush()
+    return await coach_run(session, run, llm_client=_text_client(text))
 
 
 async def test_request_shape() -> None:
@@ -188,6 +212,7 @@ def test_parse_coach_output_llm() -> None:
     assert out.result == "The 5K effort was 30 s off your best."
     assert out.next.pace == 340 and out.next.kind == "easy"
     assert out.pacing == "positive"  # server-decided, passed in
+    assert out.forecast == Forecast(km=4.0, pace=360)
 
 
 def test_parse_uses_passed_pacing() -> None:
@@ -342,6 +367,31 @@ async def test_llm_source_stored(session: AsyncSession, user: User) -> None:
     assert note.latency_ms is not None and note.latency_ms >= 0
     assert note.error is None
     assert note.packet is not None and json.loads(note.packet)["v"] == 6
+    assert note.payload["forecast"] == {"km": 4.0, "pace": 360}
+
+
+async def test_missing_forecast_falls_back_to_heuristic(session: AsyncSession, user: User) -> None:
+    output = {key: value for key, value in VALID_OUTPUT.items() if key != "forecast"}
+    note = await _coach_with_text(session, user, json.dumps(output))
+
+    assert note.source == "heuristic"
+    assert note.error is not None and "forecast" in note.error.lower()
+    assert note.payload["forecast"] is None
+
+
+@pytest.mark.parametrize(
+    "forecast",
+    [{"km": 4.0, "pace": "1:00"}, {"km": 0.0, "pace": "6:00"}],
+)
+async def test_out_of_range_forecast_falls_back(
+    session: AsyncSession, user: User, forecast: dict[str, Any]
+) -> None:
+    output = {**VALID_OUTPUT, "forecast": forecast}
+    note = await _coach_with_text(session, user, json.dumps(output))
+
+    assert note.source == "heuristic"
+    assert note.error is not None and "forecast" in note.error.lower()
+    assert note.payload["forecast"] is None
 
 
 async def test_llm_retries_after_max_tokens_failure(
@@ -585,6 +635,7 @@ async def test_no_key_path(session: AsyncSession, user: User, monkeypatch: Any) 
     assert note.error == "no api key"
     assert note.packet is None
     assert note.latency_ms is None
+    assert note.payload["forecast"] is None
 
 
 async def test_failed_rerun_keeps_llm_note(session: AsyncSession, user: User) -> None:

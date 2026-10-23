@@ -104,6 +104,22 @@ class LLMNext(BaseModel):
     why: str
 
 
+class LLMForecast(BaseModel):
+    """Predicted next run as the structured-output schema returns it (pace is "m:ss")."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    km: float
+    pace: str
+
+
+class Forecast(BaseModel):
+    """What the coach expects the runner to actually run next (pace in s/km)."""
+
+    km: float
+    pace: int
+
+
 class LLMCoachOutput(BaseModel):
     """Raw shape of the json_schema response, before pace/feedback normalisation."""
 
@@ -114,6 +130,7 @@ class LLMCoachOutput(BaseModel):
     result: str
     next: LLMNext
     frequency: Frequency
+    forecast: LLMForecast
 
 
 class CoachOutput(BaseModel):
@@ -126,6 +143,7 @@ class CoachOutput(BaseModel):
     went_well: str | None = None
     work_on: str | None = None
     result: str | None = None
+    forecast: Forecast | None = None
 
 
 class CoachNoteOut(BaseModel):
