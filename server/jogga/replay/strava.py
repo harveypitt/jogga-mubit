@@ -57,10 +57,12 @@ def haversine(a: Sample, b: Sample) -> float:
     return 2 * r * math.asin(math.sqrt(h))
 
 
-def _accept(sample: Sample, previous_raw: Sample | None) -> bool:
+def _accept(
+    sample: Sample, previous_raw: Sample | None, *, pause_gap_s: float = PAUSE_GAP_S
+) -> bool:
     if previous_raw is not None:
         gap = sample.t - previous_raw.t
-        if 0 < gap <= PAUSE_GAP_S and haversine(previous_raw, sample) / gap > MAX_SPEED_MPS:
+        if 0 < gap <= pause_gap_s and haversine(previous_raw, sample) / gap > MAX_SPEED_MPS:
             return False
     return True
 
@@ -93,13 +95,13 @@ def elevation(samples: list[Sample]) -> tuple[float, float]:
     return acc.gain, acc.loss
 
 
-def moving_time(samples: list[Sample]) -> float:
+def moving_time(samples: list[Sample], *, pause_gap_s: float = PAUSE_GAP_S) -> float:
     return sum(
-        gap for a, b in zip(samples, samples[1:], strict=False) if (gap := b.t - a.t) <= PAUSE_GAP_S
+        gap for a, b in zip(samples, samples[1:], strict=False) if (gap := b.t - a.t) <= pause_gap_s
     )
 
 
-def splits(samples: list[Sample]) -> list[dict[str, float]]:
+def splits(samples: list[Sample], *, pause_gap_s: float = PAUSE_GAP_S) -> list[dict[str, float]]:
     out: list[dict[str, float]] = []
     if len(samples) < 2:
         return out
@@ -115,7 +117,7 @@ def splits(samples: list[Sample]) -> list[dict[str, float]]:
 
     for prev, cur in zip(samples, samples[1:], strict=False):
         leg = haversine(prev, cur)
-        leg_t = max(min(cur.t - prev.t, PAUSE_GAP_S), 0.0)
+        leg_t = max(min(cur.t - prev.t, pause_gap_s), 0.0)
         split_samples.append(cur)
         remaining = leg
         while remaining > 0:
@@ -133,7 +135,7 @@ def splits(samples: list[Sample]) -> list[dict[str, float]]:
     return out
 
 
-def efforts(samples: list[Sample]) -> dict[str, float]:
+def efforts(samples: list[Sample], *, pause_gap_s: float = PAUSE_GAP_S) -> dict[str, float]:
     out: dict[str, float] = {}
     pending = sorted(STANDARD_DISTANCES.items(), key=lambda kv: kv[1])
     cumulative = 0.0
@@ -141,13 +143,13 @@ def efforts(samples: list[Sample]) -> dict[str, float]:
     for prev, cur in zip(samples, samples[1:], strict=False):
         leg = haversine(prev, cur)
         gap = cur.t - prev.t
-        leg_t = min(gap, PAUSE_GAP_S)
+        leg_t = min(gap, pause_gap_s)
         while pending and cumulative + leg >= pending[0][1]:
             key, metres = pending.pop(0)
             frac = (metres - cumulative) / leg if leg > 0 else 0.0
             out[key] = moving_before + frac * leg_t
         cumulative += leg
-        if gap <= PAUSE_GAP_S:
+        if gap <= pause_gap_s:
             moving_before += gap
     return out
 
@@ -172,6 +174,8 @@ def route_run(
     external_id: str,
     csv_elapsed: float | None,
     points: list[tuple[float, float, float | None, datetime | None]],
+    *,
+    pause_gap_s: float = PAUSE_GAP_S,
 ) -> ReplayRun | None:
     start = next((p[3] for p in points if p[3] is not None), None)
     if start is None:
@@ -184,13 +188,13 @@ def route_run(
         s = Sample((when - start).total_seconds(), lat, lon, ele)
         if s.t < (accepted[-1].t if accepted else 0.0):
             continue
-        if _accept(s, previous):
+        if _accept(s, previous, pause_gap_s=pause_gap_s):
             accepted.append(s)
         previous = s
     if len(accepted) < 2:
         return None
     distance = sum(haversine(a, b) for a, b in zip(accepted, accepted[1:], strict=False))
-    moving = moving_time(accepted)
+    moving = moving_time(accepted, pause_gap_s=pause_gap_s)
     if distance <= 0 or moving <= 0:
         return None
     gain, loss = elevation(accepted)
@@ -202,8 +206,8 @@ def route_run(
         elapsed_s=max(csv_elapsed or 0.0, accepted[-1].t),
         gain_m=gain,
         loss_m=loss,
-        splits=splits(accepted),
-        efforts=efforts(accepted),
+        splits=splits(accepted, pause_gap_s=pause_gap_s),
+        efforts=efforts(accepted, pause_gap_s=pause_gap_s),
         from_route=True,
     )
 

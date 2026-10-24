@@ -11,7 +11,9 @@ from typing import Any
 
 import pytest
 
-from jogga.replay.__main__ import _forecast_scores
+from jogga.replay import endomondo
+from jogga.replay.__main__ import _forecast_scores, _summary
+from jogga.replay.endomondo import load_runner, read_workout, select_runners, workout_run
 from jogga.replay.grade import grade
 from jogga.replay.strava import load_export, parse_gpx, route_run
 
@@ -20,6 +22,52 @@ EARTH_RADIUS_M = 6_371_000.0
 SPEED_MPS = 3.0
 ORIGIN_LATITUDE = 45.0
 START = datetime(2026, 10, 1, 7, 46, 35, tzinfo=UTC)
+
+
+def _endomondo_workout(
+    workout_id: str,
+    start_ts: float,
+    *,
+    speed_mps: float = 2.5,
+    interval_s: float = 1.0,
+) -> dict[str, Any]:
+    timestamps = [start_ts + i * interval_s for i in range(500)]
+    return {
+        "id": workout_id,
+        "timestamp": timestamps,
+        "latitude": [
+            ORIGIN_LATITUDE + math.degrees(i * speed_mps * interval_s / EARTH_RADIUS_M)
+            for i in range(500)
+        ],
+        "longitude": [0.0] * 500,
+        "altitude": [100.0] * 500,
+    }
+
+
+def _write_endomondo(
+    tmp_path: Path, workouts_by_user: dict[int, list[dict[str, Any]]]
+) -> tuple[Path, Path]:
+    data_path = tmp_path / "endomondo.json"
+    index_path = tmp_path / "index.jsonl"
+    with data_path.open("wb") as data_file, index_path.open("w", encoding="utf-8") as index_file:
+        for user, workouts in workouts_by_user.items():
+            for workout in workouts:
+                line = repr(workout).encode("utf-8") + b"\n"
+                offset = data_file.tell()
+                data_file.write(line)
+                index_file.write(
+                    json.dumps(
+                        {
+                            "u": user,
+                            "id": workout["id"],
+                            "t": workout["timestamp"][0],
+                            "off": offset,
+                            "len": len(line),
+                        }
+                    )
+                    + "\n"
+                )
+    return data_path, index_path
 
 
 def _gpx(
@@ -90,6 +138,33 @@ def test_pause_gap_is_excluded_from_moving_time_and_included_in_elapsed_time() -
 
     assert run.moving_s == pytest.approx(steps - 1)
     assert run.elapsed_s == pytest.approx(steps + 59)
+
+
+def test_pause_gap_can_be_extended_without_changing_the_default() -> None:
+    points = [
+        (ORIGIN_LATITUDE, 0.0, 100.0, START),
+        (
+            ORIGIN_LATITUDE + math.degrees(3 / EARTH_RADIUS_M),
+            0.0,
+            100.0,
+            START + timedelta(seconds=1),
+        ),
+        (
+            ORIGIN_LATITUDE + math.degrees(6 / EARTH_RADIUS_M),
+            0.0,
+            100.0,
+            START + timedelta(seconds=21),
+        ),
+    ]
+
+    default_run = route_run("default-gap", None, points)
+    endomondo_run = route_run("endo-gap", None, points, pause_gap_s=30.0)
+
+    assert default_run is not None and endomondo_run is not None
+    assert default_run.moving_s == pytest.approx(1)
+    assert default_run.elapsed_s == pytest.approx(21)
+    assert endomondo_run.moving_s == pytest.approx(21)
+    assert endomondo_run.elapsed_s == pytest.approx(21)
 
 
 def test_speed_filter_drops_a_single_gps_jump() -> None:
@@ -363,6 +438,163 @@ def test_forecast_scores_compare_coach_and_baselines() -> None:
             "median_last_5": {"km": 0.75, "pace_s": 60.0},
         },
     }
+
+
+def test_workout_run_filters_distance_and_pace() -> None:
+    assert workout_run(_endomondo_workout("short", START.timestamp(), speed_mps=1.5)) is None
+    assert (
+        workout_run(_endomondo_workout("slow", START.timestamp(), speed_mps=1.0, interval_s=2.5))
+        is None
+    )
+    assert workout_run(_endomondo_workout("fast", START.timestamp(), speed_mps=9.0)) is None
+
+    run = workout_run(_endomondo_workout("plausible", START.timestamp()))
+
+    assert run is not None
+    assert run.external_id == "endo:plausible"
+    assert run.started_at == START
+    assert run.distance_m == pytest.approx(499 * 2.5, rel=0.01)
+    assert run.moving_s == pytest.approx(499)
+    assert run.moving_s / (run.distance_m / 1000) == pytest.approx(400, rel=0.01)
+
+
+def test_read_workout_round_trips_dict_literal_offsets(tmp_path: Path) -> None:
+    first = _endomondo_workout("first", START.timestamp())
+    second = _endomondo_workout("second", START.timestamp() + 1000)
+    data_path, _ = _write_endomondo(tmp_path, {1: [first, second]})
+    second_line = (repr(second) + "\n").encode("utf-8")
+    offset = len((repr(first) + "\n").encode("utf-8"))
+
+    assert read_workout(data_path, offset, len(second_line)) == second
+
+
+def test_select_runners_is_deterministic_and_applies_selection_rules(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(endomondo, "MIN_INDEX_WORKOUTS", 3)
+    monkeypatch.setattr(endomondo, "CANDIDATE_COUNT", 4)
+    monkeypatch.setattr(endomondo, "MIN_VALID_WORKOUTS", 3)
+    monkeypatch.setattr(endomondo, "MAX_WORKOUTS_PER_RUNNER", 3)
+    monkeypatch.setattr(endomondo, "QUALIFYING_RUNNERS", 2)
+    monkeypatch.setattr(endomondo, "HOLDOUT_RUNNERS", 1)
+
+    base = START.timestamp()
+    workouts_by_user = {
+        user: [
+            _endomondo_workout(
+                f"{user}-{i}",
+                base + i * 86_400,
+                speed_mps=2.5 if user != 30 or i < 2 else 1.5,
+            )
+            for i in range(count)
+        ]
+        for user, count in ((10, 5), (20, 5), (30, 5), (40, 5), (50, 2))
+    }
+    data_path, index_path = _write_endomondo(tmp_path, workouts_by_user)
+
+    selection = select_runners(data_path, index_path)
+
+    assert selection == select_runners(data_path, index_path)
+    assert selection["seed"] == 20261023
+    assert selection["pause_gap_s"] == 30.0
+    assert len(selection["runners"]) == 2
+    assert [runner["split"] for runner in selection["runners"]] == ["holdout", "train"]
+    assert 30 not in [runner["user"] for runner in selection["runners"]]
+    assert 50 not in [runner["user"] for runner in selection["runners"]]
+    for runner in selection["runners"]:
+        assert [workout["id"] for workout in runner["workouts"]] == [
+            f"{runner['user']}-{i}" for i in (2, 3, 4)
+        ]
+        runs = load_runner(data_path, runner)
+        assert [run.external_id for run in runs] == [
+            f"endo:{runner['user']}-{i}" for i in (2, 3, 4)
+        ]
+
+
+def test_forecast_scores_do_not_cross_runner_boundaries() -> None:
+    rows = [
+        {
+            "runner": 1,
+            "i": 0,
+            "km": 4.0,
+            "pace_s": 360,
+            "note": {"forecast": {"km": 5.0, "pace": 330}},
+        },
+        {
+            "runner": 1,
+            "i": 1,
+            "km": 5.0,
+            "pace_s": 300,
+            "note": {"forecast": {"km": 6.0, "pace": 270}},
+        },
+        {
+            "runner": 2,
+            "i": 0,
+            "km": 10.0,
+            "pace_s": 600,
+            "note": {"forecast": {"km": 12.0, "pace": 540}},
+        },
+        {
+            "runner": 2,
+            "i": 1,
+            "km": 11.0,
+            "pace_s": 540,
+            "note": {"forecast": {"km": 13.0, "pace": 500}},
+        },
+    ]
+
+    assert _forecast_scores(rows) == {
+        "n": 2,
+        "mae": {
+            "coach": {"km": 0.5, "pace_s": 15.0},
+            "last_run": {"km": 1.0, "pace_s": 60.0},
+            "median_last_5": {"km": 1.0, "pace_s": 60.0},
+        },
+    }
+
+
+def test_multi_runner_summary_reports_split_and_runner_counts() -> None:
+    rows = [
+        {
+            "runner": 1,
+            "split": "train",
+            "i": 0,
+            "km": 4.0,
+            "pace_s": 360,
+            "note": {"forecast": None},
+            "checks": {"tone": True},
+            "source": "heuristic",
+            "latency_ms": None,
+            "cost_usd": None,
+        },
+        {
+            "runner": 2,
+            "split": "holdout",
+            "i": 0,
+            "km": 5.0,
+            "pace_s": 300,
+            "note": {"forecast": None},
+            "checks": {"tone": False},
+            "source": "heuristic",
+            "latency_ms": None,
+            "cost_usd": None,
+        },
+    ]
+
+    summary = _summary(
+        rows,
+        {"runners": 2, "workouts": 2},
+        "heuristic",
+        multi_runner=True,
+        holdout_coach="heuristic",
+    )
+
+    assert summary["notes"] == 2
+    assert summary["by_split"]["train"]["notes"] == 1
+    assert summary["by_split"]["holdout"]["notes"] == 1
+    assert summary["by_split"]["train"]["checks"]["tone"]["rate"] == 1.0
+    assert summary["by_split"]["holdout"]["checks"]["tone"]["rate"] == 0.0
+    assert summary["runners"] == {"1": 1, "2": 1}
 
 
 def test_tone_rules_flag_gap_acronym_but_not_the_word_gap() -> None:
