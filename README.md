@@ -53,7 +53,8 @@ JOGGA_DEV_AUTH=1 uvicorn jogga.main:app --port 8000
   Tunables: `JOGGA_LLM_MAX_TOKENS` (default 20000), `JOGGA_LLM_REASONING`
   ("" | on | off; anything else is ignored with a startup warning),
   `JOGGA_LLM_TIMEOUT_S` (default 40), `JOGGA_LLM_TOTAL_TIMEOUT_S` (default 50),
-  `JOGGA_LLM_ATTEMPTS` (default 2), and `JOGGA_LLM_TEMPERATURE` (default 0.2).
+  `JOGGA_LLM_ATTEMPTS` (default 2), and `JOGGA_LLM_TEMPERATURE` (default 0.2;
+  set to `off` to omit the temperature parameter).
 - `MUBIT_API_KEY` (optional) routes coach requests through Mubit instead of
   OpenRouter directly; configure the OpenRouter key in the Mubit console.
 - `JOGGA_MUBIT_URL` (optional) overrides Mubit’s OpenAI-compatible completion

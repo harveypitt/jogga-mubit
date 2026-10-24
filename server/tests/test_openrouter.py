@@ -211,6 +211,8 @@ def test_request_body_temperature(monkeypatch: Any) -> None:
     assert request_body("m", "s", "u")["temperature"] == 0.2
     monkeypatch.setattr(config, "LLM_TEMPERATURE", 0.0)
     assert request_body("m", "s", "u")["temperature"] == 0.0
+    monkeypatch.setattr(config, "LLM_TEMPERATURE", None)
+    assert "temperature" not in request_body("m", "s", "u")
 
 
 def test_shape_to_pacing_mapping() -> None:

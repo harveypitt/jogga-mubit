@@ -56,4 +56,7 @@ LLM_TIMEOUT_S = float(os.environ.get("JOGGA_LLM_TIMEOUT_S") or 40)
 LLM_TOTAL_TIMEOUT_S = float(os.environ.get("JOGGA_LLM_TOTAL_TIMEOUT_S") or 50)
 LLM_ATTEMPTS = int(os.environ.get("JOGGA_LLM_ATTEMPTS") or 2)
 LLM_MIN_RETRY_S = 10.0
-LLM_TEMPERATURE = float(os.environ.get("JOGGA_LLM_TEMPERATURE") or 0.2)
+_raw_temperature = (os.environ.get("JOGGA_LLM_TEMPERATURE") or "").strip()
+LLM_TEMPERATURE: float | None = (
+    None if _raw_temperature.lower() == "off" else float(_raw_temperature or 0.2)
+)

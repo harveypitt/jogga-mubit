@@ -352,7 +352,6 @@ def request_body(model: str, system: str, user: str) -> dict[str, Any]:
     body: dict[str, Any] = {
         "model": model,
         "max_tokens": config.LLM_MAX_TOKENS,
-        "temperature": config.LLM_TEMPERATURE,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -361,6 +360,8 @@ def request_body(model: str, system: str, user: str) -> dict[str, Any]:
         "provider": {"require_parameters": True},
         "usage": {"include": True},
     }
+    if config.LLM_TEMPERATURE is not None:
+        body["temperature"] = config.LLM_TEMPERATURE
     if config.LLM_REASONING == "off":
         body["reasoning"] = {"enabled": False}
     elif config.LLM_REASONING == "on":
