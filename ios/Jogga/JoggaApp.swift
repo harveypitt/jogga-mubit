@@ -87,11 +87,24 @@ struct JoggaApp: App {
 /// Shows sign-in until authed, then the tabs.
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(RunStore.self) private var store
+    #if DEBUG
+    @State private var showOnboarding = ProcessInfo.processInfo.arguments.contains("-onboardingPreview")
+    #else
+    @State private var showOnboarding = false
+    #endif
 
     var body: some View {
         Group {
             if auth.signedIn {
                 MainTabView()
+                    .fullScreenCover(isPresented: $showOnboarding) { OnboardingView() }
+                    .onChange(of: store.needsOnboarding, initial: true) { _, needs in
+                        if needs { showOnboarding = true }
+                    }
+                    .onChange(of: showOnboarding, initial: true) { _, shown in
+                        store.onboardingVisible = shown
+                    }
             } else {
                 SignInView()
             }

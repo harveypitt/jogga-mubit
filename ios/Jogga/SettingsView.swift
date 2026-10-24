@@ -22,6 +22,8 @@ struct SettingsView: View {
         + "Distance so far, three kilometres in seventeen "
         + "minutes twenty-six seconds. That's good progress "
         + "compared to your PB."
+    @Environment(RunStore.self) private var profileStore
+    @State private var showProfile = false
     #if DEBUG
     @State private var serverURL = UserDefaults.standard.string(forKey: "jogga.apiURL") ?? ""
     #endif
@@ -31,6 +33,21 @@ struct SettingsView: View {
             Form {
                 Section {
                     LabeledContent("Name", value: auth.displayName ?? "Runner")
+                }
+                Section {
+                    Button {
+                        showProfile = true
+                    } label: {
+                        LabeledContent("Training preferences") {
+                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                    .sheet(isPresented: $showProfile) {
+                        OnboardingView(initial: profileStore.profile)
+                    }
+                } footer: {
+                    Text("Your goal, the days you can run and anything you'd rather skip.")
                 }
                 #if DEBUG
                 Section("Server") {

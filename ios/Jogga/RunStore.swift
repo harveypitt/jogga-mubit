@@ -45,6 +45,11 @@ final class RunStore {
     private(set) var latestCoach: CoachNote?
     private(set) var reportThisWeek: ReportCard?
     private(set) var weekPlan: WeekPlan?
+    /// Onboarding answers; nil until loaded from the server.
+    private(set) var profile: RunnerProfile?
+    var needsOnboarding: Bool { profile?.onboarded == false }
+    /// Set by RootView so other first-run prompts wait their turn.
+    var onboardingVisible = false
     /// Check-ins waiting for their run to reach the server, keyed by run id.
     private var pendingSurveys: [String: RunSurvey] = {
         guard let data = UserDefaults.standard.data(forKey: "jogga.pendingSurveys") else {
@@ -436,7 +441,29 @@ final class RunStore {
         _ = await uploadSerially()
         await syncDeletes()
         await flushSurveys()
+        await refreshProfile()
         await refreshReportCards()
+    }
+
+    func refreshProfile() async {
+        guard api.token != nil else { return }
+        if let loaded: RunnerProfile = try? await api.get("me/profile") { profile = loaded }
+    }
+
+    /// Saves onboarding answers; the server replans the rest of this week around them.
+    func saveProfile(_ answers: RunnerProfile) async {
+        var saved = answers
+        saved.onboarded = true
+        profile = saved
+        do {
+            try await api.put(
+            "me/profile", body: answers.body,
+            query: [URLQueryItem(name: "tz", value: TimeZone.current.identifier)]
+        )
+            await refreshReportCards()
+        } catch {
+            // Offline: asked again on the next launch if it never reached the server.
+        }
     }
 
     /// Live card, last week's report (first read after Monday writes it) and history.

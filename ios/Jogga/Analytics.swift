@@ -25,6 +25,8 @@ enum AnalyticsEvent: String {
     /// Multiple-choice answers and yes/no flags only: never injury details or notes.
     case runSurveySubmitted = "run_survey_submitted"
     case runSurveySkipped = "run_survey_skipped"
+    case onboardingCompleted = "onboarding_completed"
+    case onboardingSkipped = "onboarding_skipped"
 }
 
 enum Screen: String {
@@ -35,7 +37,7 @@ enum Screen: String {
     case runDetail = "run_detail"
     case routeMap = "route_map", activeRun = "active_run", settings
     case stravaImport = "strava_import", target, license
-    case runSurvey = "run_survey"
+    case runSurvey = "run_survey", onboarding
 }
 
 enum AnalyticsValue {

@@ -223,3 +223,58 @@ struct WeekPlan: Codable, Hashable {
     var next: Session? { sessions.first(where: \.isNext) }
     var doneCount: Int { sessions.filter { $0.status == "done" }.count }
 }
+
+
+/// Onboarding answers from `GET /me/profile`. `raceDate` travels as "YYYY-MM-DD".
+struct RunnerProfile: Codable, Hashable {
+    var onboarded = false
+    var goal: String?
+    var raceDate: Date?
+    var days: [Int] = []
+    var runsPerWeek: Int?
+    var experience: String?
+    var usualWeekKm: Double?
+    var dislikes: [String] = []
+    var niggles: String?
+    var consent = false
+
+    enum CodingKeys: String, CodingKey {
+        case onboarded, goal, days, experience, dislikes, niggles, consent
+        case raceDate = "race_date", runsPerWeek = "runs_per_week", usualWeekKm = "usual_week_km"
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        onboarded = try c.decodeIfPresent(Bool.self, forKey: .onboarded) ?? false
+        goal = try c.decodeIfPresent(String.self, forKey: .goal)
+        raceDate = try c.decodeIfPresent(String.self, forKey: .raceDate).flatMap(Self.day.date(from:))
+        days = try c.decodeIfPresent([Int].self, forKey: .days) ?? []
+        runsPerWeek = try c.decodeIfPresent(Int.self, forKey: .runsPerWeek)
+        experience = try c.decodeIfPresent(String.self, forKey: .experience)
+        usualWeekKm = try c.decodeIfPresent(Double.self, forKey: .usualWeekKm)
+        dislikes = try c.decodeIfPresent([String].self, forKey: .dislikes) ?? []
+        niggles = try c.decodeIfPresent(String.self, forKey: .niggles)
+        consent = try c.decodeIfPresent(Bool.self, forKey: .consent) ?? false
+    }
+
+    var body: [String: Any] {
+        var out: [String: Any] = ["days": days, "dislikes": dislikes, "consent": consent]
+        if let goal { out["goal"] = goal }
+        if let raceDate { out["race_date"] = Self.day.string(from: raceDate) }
+        if let runsPerWeek { out["runs_per_week"] = runsPerWeek }
+        if let experience { out["experience"] = experience }
+        if let usualWeekKm { out["usual_week_km"] = usualWeekKm }
+        if let niggles, !niggles.isEmpty { out["niggles"] = String(niggles.prefix(300)) }
+        return out
+    }
+
+    static let day: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .iso8601)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+}

@@ -63,8 +63,8 @@ final class APIClient {
         return try decoder.decode(T.self, from: data)
     }
 
-    func put(_ path: String, body: [String: Any]) async throws {
-        let (_, http) = try await request("PUT", path, body: body)
+    func put(_ path: String, body: [String: Any], query: [URLQueryItem] = []) async throws {
+        let (_, http) = try await request("PUT", path, query: query, body: body)
         guard (200..<300).contains(http.statusCode) else { throw APIError(status: http.statusCode) }
     }
 

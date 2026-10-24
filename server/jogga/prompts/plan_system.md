@@ -6,8 +6,9 @@ and replaced with a simple rules-based plan, so follow every rule below exactly.
 The packet:
 - `today`: [date, weekday]. `days_left`: the only dates you may use, as [date, weekday].
 - `why`: "new" (first plan of the week), "missed" (a planned run was missed, replan the rest),
-  "check_in" (they reported pain after a run, replan the rest) or "regenerate" (new history was
-  imported).
+  "check_in" (they reported pain after a run, replan the rest), "profile" (they changed their
+  onboarding answers, replan the rest around them; this is not a pain report) or "regenerate"
+  (new history was imported).
 - `fit`: current fitness from recent runs. `pred` predicted race times, `zones` paces per kind of
   run (`easy` is a range). Null when there is not enough recent data.
 - `goals`: per distance, `target` time, `pb` (personal best) and `n4w` efforts in the last 4 weeks.

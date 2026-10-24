@@ -9,7 +9,7 @@ from typing import Annotated, Literal, cast
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import delete, func, select, tuple_, update
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +32,6 @@ from .models import (
     Session,
     Target,
     User,
-    WeekPlan,
 )
 from .planner import flag_injury, newest_import, plan_out, sync_plan
 from .posthog import get_posthog_client, initialize_posthog
@@ -417,8 +416,8 @@ async def get_profile(user: Authed, db: DB) -> dict[str, object]:
 
 
 @app.put("/me/profile")
-async def put_profile(body: ProfileIn, user: Authed, db: DB) -> dict[str, bool]:
-    """Onboarding answers. The rest of this week is replanned around them on the next read."""
+async def put_profile(body: ProfileIn, user: Authed, db: DB, tz: TZ = None) -> dict[str, bool]:
+    """Onboarding answers. The rest of this week is replanned around them straight away."""
     answers = body.model_dump()
     answers["days"] = sorted({d for d in body.days if 0 <= d <= 6})
     answers["dislikes"] = sorted(set(body.dislikes))
@@ -430,11 +429,7 @@ async def put_profile(body: ProfileIn, user: Authed, db: DB) -> dict[str, bool]:
             set_={**{k: stmt.excluded[k] for k in answers}, "updated_at": func.now()},
         )
     )
-    await db.execute(
-        update(WeekPlan)
-        .where(WeekPlan.user_id == user.id, WeekPlan.week_start >= date.today() - timedelta(days=7))
-        .values(needs_replan=True, replanned_on=None)
-    )
+    await sync_plan(db, user.id, tz, reason="profile")
     await db.commit()
     return {"ok": True}
 

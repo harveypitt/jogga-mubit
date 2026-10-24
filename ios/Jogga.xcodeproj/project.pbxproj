@@ -41,6 +41,7 @@
 		6773CF1C04782BB85B6CC478 /* RunRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30542316765693AAFA2F7E17 /* RunRecorder.swift */; };
 		6F1BE6EE486B587DC9286B61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F3911FF8381F09DAF04BB04 /* Assets.xcassets */; };
 		783C46293F8085C19F782541 /* onnxruntime in Frameworks */ = {isa = PBXBuildFile; productRef = E2C37DEF7E3D2439B6CFE430 /* onnxruntime */; };
+		78B0FC3C3D71D63B3D5D6002 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FBBE8C51E5A3836BA5DC0F2 /* OnboardingView.swift */; };
 		793488A5F163CF98547DCFAE /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A7098E3F58248DCEC35B9FF /* AuthStore.swift */; };
 		7B58A773AB7BCE860C473BAE /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761C0F9E1DBD4912FBA11332 /* SettingsView.swift */; };
 		7B6D53C87A2DBEDC1910D07B /* SystemVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C0608C75AFA25EE0245C17 /* SystemVoice.swift */; };
@@ -125,6 +126,7 @@
 		00057DBA6F5BB1489F24EF6A /* RunTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunTabView.swift; sourceTree = "<group>"; };
 		0236F8CC4602745BC88BA3F4 /* CoachVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachVoice.swift; sourceTree = "<group>"; };
 		0AE6B259F228F366C4359E96 /* steven.ref.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = steven.ref.json; sourceTree = "<group>"; };
+		0FBBE8C51E5A3836BA5DC0F2 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		1350DEF0A8B289B10D3E7CC4 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		1423D000E40EAB0C8945753A /* VoiceModels */ = {isa = PBXFileReference; lastKnownFileType = folder; name = VoiceModels; path = Jogga/VoiceModels; sourceTree = SOURCE_ROOT; };
 		164499444F4F8892257C7785 /* JoggaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoggaApp.swift; sourceTree = "<group>"; };
@@ -315,6 +317,7 @@
 				901AF59B37735F811FF63737 /* Jogga.entitlements */,
 				164499444F4F8892257C7785 /* JoggaApp.swift */,
 				D19334F11D9B902B7A1F9679 /* Models.swift */,
+				0FBBE8C51E5A3836BA5DC0F2 /* OnboardingView.swift */,
 				EC4E0C3055FFD0BBAB42D4DF /* ProgressTabView.swift */,
 				40D39027A5096566B019BE8E /* ReportCardView.swift */,
 				87007221923A21BE37E7E6A0 /* RoutePace.swift */,
@@ -564,6 +567,7 @@
 				94E1073BA1DA8FE8F2322B02 /* NeuTTSBackbone.swift in Sources */,
 				B0747555249172B0BE2C3244 /* NeuTTSStream.swift in Sources */,
 				8FE79A78E9DEDD9928C560B6 /* NeuTTSVoice.swift in Sources */,
+				78B0FC3C3D71D63B3D5D6002 /* OnboardingView.swift in Sources */,
 				15860CEECDDB3B65A991055F /* PhraseBook.swift in Sources */,
 				FBA9A543C17A5A22C4DF1599 /* ProgressTabView.swift in Sources */,
 				E2BB667CA0F64F3B56A42CEF /* ReportCardView.swift in Sources */,

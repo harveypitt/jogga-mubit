@@ -737,6 +737,7 @@ async def sync_plan(
     llm_client: LLMClient | None = None,
     allow_llm: bool = True,
     force: bool = False,
+    reason: str | None = None,
     now: datetime | None = None,
 ) -> WeekPlan | None:
     """Bring this week's plan up to date. Writes a plan on the first call of the week and
@@ -747,7 +748,9 @@ async def sync_plan(
     runs = list(
         (await db.scalars(select(Run).where(Run.user_id == user_id).order_by(Run.started_at))).all()
     )
-    if not runs:
+    profile = await db.get(RunnerProfile, user_id)
+    # Onboarding answers are enough for a first plan before any runs.
+    if not runs and profile is None:
         return None
     zone = valid_tz(tz) or next((r.tz for r in reversed(runs) if valid_tz(r.tz)), None) or "UTC"
     now = now or datetime.now(UTC)
@@ -770,14 +773,13 @@ async def sync_plan(
             )
         ).all()
     )
-    profile = await db.get(RunnerProfile, user_id)
     f = facts(runs, zone, now, prev_count, surveys=surveys, profile=profile)
     if row is not None:
         match_runs(row, f)
     if row is None:
         why = "new"
-    elif force:
-        why = "regenerate"
+    elif force or reason:
+        why = reason or "regenerate"
     elif row.needs_replan and row.replanned_on != f.today:
         why = "missed" if any(s["status"] == "missed" for s in row.sessions) else "check_in"
     else:
@@ -833,7 +835,9 @@ async def sync_plan(
         row.replanned_on = f.today
         row.needs_replan = False
     row.note = note if note is not None else row.note
-    row.change = change if why in ("missed", "check_in") else None
+    row.change = change if why in ("missed", "check_in", "profile") else None
+    if why == "profile" and change is None:
+        row.change = "Replanned around your training preferences."
     if why == "check_in" and change is None:
         row.change = "Eased off the rest of the week after your check-in."
     if why == "missed" and change is None:

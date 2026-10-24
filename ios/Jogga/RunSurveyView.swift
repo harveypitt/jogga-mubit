@@ -360,7 +360,7 @@ struct RunSurveyView: View {
 }
 
 /// A little emoji burst behind the finish check.
-private struct Burst: View {
+struct Burst: View {
     @State private var go = false
     private let emojis = ["🎉", "⭐️", "🔥", "💪", "✨", "🏃", "🎉", "⭐️", "✨", "💥", "🔥", "🏅"]
 

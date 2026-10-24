@@ -386,3 +386,24 @@ async def test_profile_round_trips_and_shapes_the_plan(
     assert all(date.fromisoformat(s["date"]).weekday() in (1, 5) for s in planned)
     assert all(s["kind"] != "intervals" for s in planned)
     assert len(planned) <= 2
+
+
+async def test_onboarding_alone_gives_a_first_plan(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    assert (await client.get("/plan/current", headers=auth)).json()["plan"] is None
+    body = {
+        "days": [0, 1, 2, 3, 4, 5, 6],
+        "runs_per_week": 3,
+        "experience": "regular",
+        "usual_week_km": 12,
+        "consent": True,
+    }
+    await client.put("/me/profile", json=body, headers=auth)
+    plan = (await client.get("/plan/current", headers=auth)).json()["plan"]
+    planned = [s for s in plan["sessions"] if s["status"] == "planned"]
+    assert planned and all(s["km"] >= 3 for s in planned)
+    await client.put("/me/profile", json={**body, "days": [6]}, headers=auth)
+    plan = (await client.get("/plan/current", headers=auth)).json()["plan"]
+    assert all(s["weekday"] == "Sun" for s in plan["sessions"] if s["status"] == "planned")
+    assert plan["change"] == "Replanned around your training preferences."
