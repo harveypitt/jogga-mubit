@@ -235,7 +235,7 @@ struct ProgressTabView: View {
                    efforts.isEmpty || prediction.from != distance {
                     predictionCard(from: prediction.from, seconds: prediction.seconds)
                 }
-                if let note = store.latestCoach { frequencyCard(note) }
+                if let plan = store.weekPlan { frequencyCard(plan) }
             }
             .navigationTitle("Progress")
             .toolbar {
@@ -439,14 +439,16 @@ struct ProgressTabView: View {
         }
     }
 
-    private func frequencyCard(_ note: CoachNote) -> some View {
+    private func frequencyCard(_ plan: WeekPlan) -> some View {
         Card(spacing: 8) {
             Text("How often").statLabel()
-            Metric(value: "\(note.payload.frequency.runsPerWeek)", unit: "runs a week", size: 30)
-            Text(note.payload.frequency.note)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Metric(value: "\(plan.originalCount)", unit: "runs this week", size: 30)
+            if let note = plan.note {
+                Text(note)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

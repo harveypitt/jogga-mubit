@@ -44,6 +44,9 @@ final class RunStore {
     private(set) var hasSyncedMe = false
     private(set) var latestCoach: CoachNote?
     private(set) var reportThisWeek: ReportCard?
+    private(set) var weekPlan: WeekPlan?
+    /// The plan's next run still to do (today's if there is one).
+    var nextSession: WeekPlan.Session? { weekPlan?.next }
     private(set) var reportLastWeek: ReportCard?
     /// Newest first, including this week.
     private(set) var reportHistory: [ReportCard] = []
@@ -330,6 +333,17 @@ final class RunStore {
         return ImportOutcome(added: added, duplicates: imported.count - added)
     }
 
+    /// One planner call so this week's plan reflects imported history.
+    @discardableResult
+    func regeneratePlan() async -> WeekPlan? {
+        struct Plan: Decodable { var plan: WeekPlan? }
+        guard let response: Plan = try? await api.post("plan/regenerate", body: [:]) else {
+            return nil
+        }
+        weekPlan = response.plan
+        return response.plan
+    }
+
     /// One coach call so the next-run plan reflects imported history.
     @discardableResult
     func replanCoach() async -> CoachNote? {
@@ -396,13 +410,16 @@ final class RunStore {
         guard api.token != nil else { return }
         struct One: Decodable { var card: ReportCard? }
         struct Many: Decodable { var weeks: [ReportCard] }
+        struct Plan: Decodable { var plan: WeekPlan? }
         let tz = [URLQueryItem(name: "tz", value: TimeZone.current.identifier)]
+        async let plan: Plan? = try? api.get("plan/current", query: tz)
         async let current: One? = try? api.get("report-card/current", query: tz)
         async let last: One? = try? api.get("report-card/latest-closed", query: tz)
         async let history: Many? = try? api.get(
             "report-card/history", query: tz + [URLQueryItem(name: "weeks", value: "12")]
         )
-        let (c, l, h) = await (current, last, history)
+        let (c, l, h, p) = await (current, last, history, plan)
+        if let p { weekPlan = p.plan }
         if let c { reportThisWeek = c.card }
         if let l { reportLastWeek = l.card }
         if let h { reportHistory = h.weeks }

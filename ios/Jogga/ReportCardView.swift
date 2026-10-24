@@ -124,7 +124,8 @@ struct ReportTabView: View {
     @Environment(RunStore.self) private var store
 
     private var isEmpty: Bool {
-        store.reportThisWeek == nil && store.reportLastWeek == nil && store.reportHistory.isEmpty
+        store.weekPlan == nil && store.reportThisWeek == nil && store.reportLastWeek == nil
+            && store.reportHistory.isEmpty
     }
 
     var body: some View {
@@ -139,6 +140,10 @@ struct ReportTabView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
+                    if let plan = store.weekPlan {
+                        WeekPlanCard(plan: plan)
+                            .padding(.bottom, 6)
+                    }
                     ReportCardSection()
                 }
             }
@@ -146,6 +151,112 @@ struct ReportTabView: View {
             .refreshable { await store.refreshReportCards() }
         }
         .trackScreen(.report)
+    }
+}
+
+// MARK: Week plan
+
+/// This week's runs, top of the Week tab: what's done, what's next, what moved.
+struct WeekPlanCard: View {
+    var plan: WeekPlan
+
+    var body: some View {
+        Card(spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("This week's plan").statLabel()
+                Spacer()
+                Text("\(plan.doneCount) of \(plan.sessions.count) done")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            if let change = plan.change {
+                Label(change, systemImage: "arrow.triangle.2.circlepath")
+                    .font(.subheadline)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(plan.sessions.enumerated()), id: \.element.id) { index, session in
+                    if index > 0 { Divider() }
+                    PlanSessionRow(session: session)
+                }
+            }
+            if let note = plan.note {
+                Text(note)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private struct PlanSessionRow: View {
+    var session: WeekPlan.Session
+
+    private var missed: Bool { session.status == "missed" }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(session.weekday)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(session.isToday ? Color.brand : Color.secondary)
+                .frame(width: 36, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(session.kind.capitalized) \(Fmt.kmShort(session.km)) km")
+                    .font(.body.weight(.medium))
+                    .strikethrough(missed)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            status
+        }
+        .padding(.vertical, 10)
+        .opacity(missed ? 0.55 : 1)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var subtitle: String {
+        var parts = ["\(Fmt.pace(Double(session.pace))) /km"]
+        if let from = session.movedFrom, let day = Self.weekday(from) {
+            parts.append("moved from \(day)")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private var status: some View {
+        switch session.status {
+        case "done":
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(Color.brand)
+                .accessibilityLabel("Done")
+        case "missed":
+            Text("Missed")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        default:
+            if session.isToday {
+                Chip(text: "Today", prominent: true)
+            } else if session.isNext {
+                Chip(text: "Next")
+            }
+        }
+    }
+
+    private static let isoDay: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static func weekday(_ iso: String) -> String? {
+        guard let date = isoDay.date(from: iso) else { return nil }
+        return date.formatted(.dateTime.weekday(.abbreviated))
     }
 }
 

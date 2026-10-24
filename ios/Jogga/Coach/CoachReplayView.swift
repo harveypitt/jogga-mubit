@@ -93,7 +93,7 @@ struct CoachReplayView: View {
         if let key = run.primaryDistance, store.targets[key] != nil {
             return .race(distanceKey: key)
         }
-        if let next = store.latestCoach?.payload.next {
+        if let next = store.nextSession {
             return .plan(kind: next.kind, km: next.km,
                          paceSPerKm: Double(next.pace))
         }
@@ -110,7 +110,7 @@ struct CoachReplayView: View {
                     }
                 }
             }
-            if let next = store.latestCoach?.payload.next {
+            if let next = store.nextSession {
                 Button("\(next.kind.capitalized) \(Fmt.kmShort(next.km)) km") {
                     mode = .plan(kind: next.kind, km: next.km,
                                  paceSPerKm: Double(next.pace))

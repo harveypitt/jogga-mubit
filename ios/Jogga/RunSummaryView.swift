@@ -241,22 +241,24 @@ struct RunSummaryView: View {
                         .font(.body)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Divider()
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Next time").statLabel()
-                    HStack(alignment: .firstTextBaseline, spacing: 14) {
-                        Metric(value: Fmt.kmShort(coach.payload.next.km), unit: "km", size: 30,
-                               weight: .bold)
-                        Metric(value: Fmt.pace(Double(coach.payload.next.pace)), unit: "/km",
-                               size: 22)
-                            .foregroundStyle(Color.brand)
-                        Spacer()
-                        Chip(text: coach.payload.next.kind.capitalized)
+                if let next = store.nextSession {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Next time").statLabel()
+                        HStack(alignment: .firstTextBaseline, spacing: 14) {
+                            Metric(value: Fmt.kmShort(next.km), unit: "km", size: 30,
+                                   weight: .bold)
+                            Metric(value: Fmt.pace(Double(next.pace)), unit: "/km",
+                                   size: 22)
+                                .foregroundStyle(Color.brand)
+                            Spacer()
+                            Chip(text: next.kind.capitalized)
+                        }
+                        Text(next.detail)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text(coach.payload.next.detail)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if coach.source == "llm" {
                     Divider()

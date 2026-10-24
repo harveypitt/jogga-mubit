@@ -69,7 +69,7 @@ struct JoggaApp: App {
                     recorder.requestAuthorization()
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("-demoRun") {
-                        if let next = store.latestCoach?.payload.next {
+                        if let next = store.nextSession {
                             coach.begin(mode: .plan(kind: next.kind, km: next.km,
                                                     paceSPerKm: Double(next.pace)),
                                         store: store)

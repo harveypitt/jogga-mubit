@@ -101,8 +101,9 @@ struct CoachNote: Codable, Hashable {
     struct Payload: Codable, Hashable {
         var feedback: String
         var pacing: String
-        var next: Next
-        var frequency: Frequency
+        /// Only on older notes (and rules-based ones); the week plan prescribes runs now.
+        var next: Next?
+        var frequency: Frequency?
         /// Structured feedback fields; older notes only have `feedback`.
         var wentWell: String?
         var workOn: String?
@@ -176,4 +177,49 @@ struct DistanceStats: Codable, Hashable {
         case count
         case count4w = "count_4w"
     }
+}
+
+/// This week's plan from the server: the planner LLM writes it and the server
+/// checks it against fixed safety rules.
+struct WeekPlan: Codable, Hashable {
+    var weekStart: String
+    var tz: String
+    var note: String?
+    var change: String?
+    var source: String
+    var originalCount: Int
+    var today: String
+    var sessions: [Session]
+
+    enum CodingKeys: String, CodingKey {
+        case weekStart = "week_start"
+        case originalCount = "original_count"
+        case tz, note, change, source, today, sessions
+    }
+
+    struct Session: Codable, Hashable, Identifiable {
+        var id: String
+        var date: String
+        var weekday: String
+        var kind: String
+        var km: Double
+        var pace: Int
+        var detail: String
+        var why: String
+        /// planned, done or missed.
+        var status: String
+        var movedFrom: String?
+        var isToday: Bool
+        var isNext: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case id, date, weekday, kind, km, pace, detail, why, status
+            case movedFrom = "moved_from"
+            case isToday = "is_today"
+            case isNext = "is_next"
+        }
+    }
+
+    var next: Session? { sessions.first(where: \.isNext) }
+    var doneCount: Int { sessions.filter { $0.status == "done" }.count }
 }

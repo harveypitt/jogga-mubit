@@ -39,7 +39,7 @@ struct StravaImportView: View {
         var duplicates: Int
         var otherActivities: Int
         var unreadable: Int
-        var next: CoachNote.Payload.Next?
+        var next: WeekPlan.Session?
     }
 
     @State private var phase: Phase = .idle
@@ -252,10 +252,10 @@ struct StravaImportView: View {
                 }.value
                 phase = .uploading
                 let outcome = try await store.importRuns(parsed.runs, source: StravaImporter.source)
-                var next: CoachNote.Payload.Next?
+                var next: WeekPlan.Session?
                 if outcome.added > 0 {
                     phase = .coaching
-                    next = await store.replanCoach()?.payload.next
+                    next = await store.regeneratePlan()?.next
                 }
                 Analytics.capture(.stravaImported, [
                     "runs": .string(Analytics.countBand(outcome.added)),

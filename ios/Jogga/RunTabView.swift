@@ -100,10 +100,10 @@ struct RunTabView: View {
     @ViewBuilder
     private var nextRunCard: some View {
         let today = Activity.runsToday(store.runs, now: .now, calendar: Activity.calendar())
-        if let next = store.latestCoach?.payload.next {
+        if let next = store.nextSession {
             Card(spacing: 14) {
                 HStack {
-                    Text(today.isEmpty ? "Next run" : "Tomorrow").statLabel()
+                    Text(next.isToday ? "Today's run" : "Next run · \(next.weekday)").statLabel()
                     Spacer()
                     Chip(text: next.kind.capitalized)
                 }
@@ -117,6 +117,16 @@ struct RunTabView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        } else if store.weekPlan != nil {
+            Card(spacing: 10) {
+                Text("Next run").statLabel()
+                if !today.isEmpty { doneToday(today) }
+                Text("That's this week's plan done.")
+                    .font(Jogga.rounded(.title3, weight: .medium))
+                Text("Next week's plan arrives on Monday.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         } else {
             Card(spacing: 10) {
@@ -276,7 +286,7 @@ struct RunTabView: View {
 
     /// Planned session when the coach has one, else a free run.
     private var defaultMode: CoachMode {
-        if let next = store.latestCoach?.payload.next {
+        if let next = store.nextSession {
             return .plan(kind: next.kind, km: next.km,
                          paceSPerKm: Double(next.pace))
         }
@@ -285,7 +295,7 @@ struct RunTabView: View {
 
     private var todayPicker: some View {
         Menu {
-            if let next = store.latestCoach?.payload.next {
+            if let next = store.nextSession {
                 Button {
                     mode = .plan(kind: next.kind, km: next.km,
                                  paceSPerKm: Double(next.pace))
