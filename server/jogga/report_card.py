@@ -61,6 +61,7 @@ class Row:
     metric: str
     inputs: dict[str, Any] = field(default_factory=dict)
     trend: Literal["up", "down", "same"] | None = None
+    was: Grade | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -68,6 +69,7 @@ class Row:
             "label": LABELS[self.category],
             "grade": self.grade,
             "trend": self.trend,
+            "was": self.was,
             "metric": self.metric,
             "how": HOW[self.category],
             "details": [list(d) for d in explain(self.category, self.inputs)],
@@ -156,8 +158,8 @@ def explain(category: str, inputs: dict[str, Any]) -> list[tuple[str, str]]:
             out.append((label, fmt_dur(p) if p is not None else "—"))
         if inputs.get("target_s") is not None:
             out.append(("Target", fmt_dur(inputs["target_s"])))
-        if inputs.get("carried_over"):
-            out.append(("This week", "No new effort, held from last week"))
+        if inputs.get("new_effort") is False:
+            out.append(("New effort", "None this week"))
         return out
     return []
 
@@ -460,9 +462,12 @@ def grade_progress(
     distance: str,
     target_s: int | None,
     new_effort: bool,
-    carried: Row | None,
 ) -> Row:
-    """``preds`` are week-end predictions for the last 4 weeks, oldest first."""
+    """``preds`` are week-end predictions for the last 4 weeks, oldest first.
+
+    Graded from run data alone, never carried from an earlier week, so a week's
+    grade is the same whichever window it is read through.
+    """
     pct = _trend_pct(preds)
     label = DISTANCE_LABELS[distance]
     if pct is None:
@@ -475,15 +480,8 @@ def grade_progress(
         "predictions": [round(p) if p is not None else None for p in preds],
         "trend_pct": round(pct * 100, 1),
         "target_s": target_s,
+        "new_effort": new_effort,
     }
-    if not new_effort and carried is not None and carried.grade is not None:
-        inputs["carried_over"] = True
-        return Row(
-            "progress",
-            carried.grade,
-            f"{label} prediction {fmt_dur(current)} · no new data",
-            inputs,
-        )
     grade: Grade = "A" if pct <= -0.01 else "B" if pct <= 0.01 else "C" if pct <= 0.03 else "D"
     change = round(first - current)
     parts = [f"{label} prediction {fmt_dur(current)}"]
@@ -633,7 +631,6 @@ def grade_weeks(
                 distance,
                 ctx.targets.get(distance),
                 new_effort,
-                prev.rows["progress"] if prev else None,
             ),
         }
         if plan is not None and len(wk_runs) > plan and rows["load"].grade in ("C", "D"):
@@ -644,6 +641,7 @@ def grade_weeks(
                 if row.grade is not None and was is not None:
                     a, b = GRADES.index(row.grade), GRADES.index(was)
                     row.trend = "up" if a < b else "down" if a > b else "same"
+                    row.was = was
 
         sessions = {"easy": 0, "steady": 0, "hard": 0}
         table: list[list[Any]] = []
@@ -679,7 +677,7 @@ def grade_weeks(
             current.rows = {c: Row(c, None, "Rest week, nothing to grade") for c in CATEGORIES}
         if since is None or week >= since:
             out[week] = current
-        # A rest week neither sets the trend baseline nor carries Progress.
+        # A rest week doesn't set the trend baseline.
         if wk_runs:
             prev = current
         week += timedelta(weeks=1)

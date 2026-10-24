@@ -146,14 +146,15 @@ def test_pacing_uses_hill_adjusted_splits() -> None:
 
 
 def test_progress_needs_a_trend() -> None:
-    assert grade_progress([None, None, 1500, 1490], "5k", None, True, None).grade is None
-    faster = grade_progress([1560, 1540, 1525, 1500], "5k", 1440, True, None)
+    assert grade_progress([None, None, 1500, 1490], "5k", None, True).grade is None
+    faster = grade_progress([1560, 1540, 1525, 1500], "5k", 1440, True)
     assert faster.grade == "A" and "1:00 faster over 4 weeks" in faster.metric
     assert "1:00 to target" in faster.metric
-    slower = grade_progress([1500, 1520, 1540, 1560], "5k", None, True, None)
+    slower = grade_progress([1500, 1520, 1540, 1560], "5k", None, True)
     assert slower.grade == "D"
-    carried = grade_progress([1500, 1520, 1540, 1560], "5k", None, False, faster)
-    assert carried.grade == "A" and carried.inputs["carried_over"]
+    # No new effort doesn't hold an old grade: a slipping prediction still shows.
+    held = grade_progress([1500, 1520, 1540, 1560], "5k", None, False)
+    assert held.grade == "D" and held.inputs["new_effort"] is False
 
 
 def _week(**grades: str | None) -> Week:
@@ -205,6 +206,23 @@ def test_since_returns_only_recent_weeks() -> None:
     recent = grade_weeks(ctx, since=this - timedelta(weeks=2))
     assert sorted(recent) == [this - timedelta(weeks=i) for i in (2, 1, 0)]
     assert recent[this].grades_json() == full[this].grades_json()
+
+
+def test_progress_grade_does_not_depend_on_the_window() -> None:
+    now = datetime(2026, 10, 22, 18, tzinfo=UTC)
+    # Fast 5Ks early on, then easy runs with no new best effort.
+    runs = [
+        mk_run(now - timedelta(days=d), [300] * 5, efforts={"5k": 1500 - 2 * (70 - d)})
+        for d in range(70, 40, -3)
+    ] + [mk_run(now - timedelta(days=d), [380] * 5) for d in range(38, 0, -3)]
+    ctx = Context(runs, "UTC", now, plans=[], targets={"5k": 1440})
+    this = local_week(now, "UTC")
+    full = grade_weeks(ctx)
+    for back in range(1, 4):
+        since = this - timedelta(weeks=back)
+        recent = grade_weeks(ctx, since=since)
+        assert recent[since].rows["progress"].grade == full[since].rows["progress"].grade
+    assert full[this].rows["consistency"].was is not None
 
 
 # --- summary validation --------------------------------------------------------
