@@ -3,6 +3,36 @@
 This explains how we produced training data for a small Mubit adapter of the
 Jogga coach, and how we judged the result. All code lives in `server/jogga/replay/`.
 
+## Thesis and what we found
+
+**The idea.** Coaching runs is a repetitive, tightly specified job. Every call
+sends the same packet shape (recent runs, splits, efforts, fitness zones),
+uses the same output schema and has to obey the same numeric rules. Work like
+that should be within reach of a much smaller, cheaper model trained from a
+strong teacher. If so, personalised coaching gets cheap enough to offer
+widely. A model small enough to run on the phone would also keep a runner's
+health data on the device. The personalisation comes from each runner's own
+history in the packet, not from a separate model per user.
+
+**What we measured so far:**
+
+- A strong teacher (GPT-6.1 Sol) passed every coaching rule on 160 notes for
+  4 runners Mubit never saw. That is the target a small model has to copy.
+- A small hosted model (GPT-6 Luna) also passed every rule in the bake-off,
+  at about $0.001 a note, roughly 8x cheaper than DeepSeek.
+- Jogga's server checks and this grader catch bad answers and fall back to a
+  rule-based coach. A small model doesn't need to be perfect to be safe.
+- The first Mubit Qwen3-4B adapters, trained on about 50 examples from one
+  runner, weren't ready: 41.7% match with the teacher, and 0% once the output
+  schema grew. Smaller, narrower schemas look like the key to small models.
+- The Sol-trained adapter (34 kept examples from 638 calls) was still
+  training at the time of writing.
+
+**Still conceptual:** Mubit's docs describe no way to export an adapter, so
+we haven't run one on a phone. Mubit's quality score only measures how
+closely the adapter matches the teacher. That's why we also grade with
+Jogga's own rules.
+
 ## What Mubit does and what we do
 
 Mubit is a proxy in front of OpenRouter. Every coach call that goes through
