@@ -66,10 +66,10 @@ struct RunSurveyView: View {
     ]
     private let areas = [
         Option(id: "foot", emoji: "🦶", title: "Foot or ankle"),
-        Option(id: "calf", emoji: "🦵", title: "Calf or shin"),
-        Option(id: "knee", emoji: "🦿", title: "Knee"),
-        Option(id: "hip", emoji: "🍑", title: "Hip or thigh"),
-        Option(id: "back", emoji: "🔙", title: "Back"),
+        Option(id: "calf", emoji: "🧦", title: "Calf or shin"),
+        Option(id: "knee", emoji: "🦵", title: "Knee"),
+        Option(id: "hip", emoji: "🚶", title: "Hip or thigh"),
+        Option(id: "back", emoji: "🧍", title: "Back"),
         Option(id: "other", emoji: "📍", title: "Somewhere else"),
     ]
     private let severities = [
