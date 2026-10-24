@@ -25,8 +25,8 @@ history in the packet, not from a separate model per user.
 - The first Mubit Qwen3-4B adapters, trained on about 50 examples from one
   runner, weren't ready: 41.7% match with the teacher, and 0% once the output
   schema grew. Smaller, narrower schemas look like the key to small models.
-- The Sol-trained adapter (34 kept examples from 638 calls) was still
-  training at the time of writing.
+- Mubit kept 151 of the 641 Sol calls as examples. Adapter v1 started
+  training on the first 34 and was still training at the time of writing.
 
 **Still conceptual:** Mubit's docs describe no way to export an adapter, so
 we haven't run one on a phone. Mubit's quality score only measures how
@@ -181,9 +181,11 @@ planning into its own planner call. Live coach calls now use a different
 schema, so Mubit files them under a separate task.
 
 Mubit grouped the Sol calls into a new task ("Jogga's running coach 3", 641
-calls, all `openai/gpt-6.1-sol`). It kept 34 of them as examples, since Mubit
-chooses which recorded calls to keep, and started training adapter v1 on
-Qwen3-4B. We'll add v1's test results here once Mubit has scored it.
+calls, all `openai/gpt-6.1-sol`). Mubit's reviewer ran over the calls in
+batches. It kept 34 from one batch, and adapter v1 on Qwen3-4B started
+training straight after that. A later batch added 117 kept examples and 20
+rejected ones, for 151 kept in total. Those later examples should go into
+later versions. We'll add v1's test results here once Mubit has scored it.
 
 ### Earlier attempt: one runner, DeepSeek teacher
 
