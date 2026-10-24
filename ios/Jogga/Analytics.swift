@@ -25,7 +25,7 @@ enum AnalyticsEvent: String {
 }
 
 enum Screen: String {
-    case signIn = "sign_in", run, progress, history
+    case signIn = "sign_in", run, report, progress, history
     /// Post-run sheet (RunSummaryView isNew == true).
     case runSummary = "run_summary"
     /// RunSummaryView from History/Run tab (isNew == false).

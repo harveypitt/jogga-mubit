@@ -220,9 +220,6 @@ struct ProgressTabView: View {
     var body: some View {
         NavigationStack {
             JoggaScreen {
-                ReportCardSection()
-                    .padding(.bottom, 6)
-
                 Picker("Distance", selection: $distance) {
                     ForEach(RunMath.standardDistances, id: \.key) { d in
                         Text(Fmt.distanceName(d.key)).tag(d.key)

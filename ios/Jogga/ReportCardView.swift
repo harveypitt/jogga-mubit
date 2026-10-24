@@ -34,6 +34,8 @@ struct ReportCard: Codable, Hashable, Identifiable {
         var label: String
         var grade: String?
         var trend: String?
+        /// Last week's grade, when ``trend`` is set.
+        var was: String?
         var metric: String
         var how: String
         var details: [[String]]
@@ -53,6 +55,21 @@ struct ReportCard: Codable, Hashable, Identifiable {
     }
 
     func row(_ category: String) -> Row? { rows.first { $0.category == category } }
+
+    /// UserDefaults key for the last closed week whose report has been seen.
+    static let seenWeekKey = "reportSeenWeek"
+
+    /// Calm scale: accent for good weeks, warm for "work on", never alarm red.
+    /// Grey is kept for "—" (not graded).
+    static func tint(_ grade: String?) -> Color {
+        switch grade {
+        case "A": .brand
+        case "B": .teal
+        case "C": .orange
+        case "D": Color(red: 0.78, green: 0.35, blue: 0.27)
+        default: .gray
+        }
+    }
 
     /// "19–25 Oct", or "28 Sep – 4 Oct" across months.
     var weekRange: String {
@@ -100,10 +117,40 @@ enum ReportCardTab: String, CaseIterable {
     case trend = "12 weeks"
 }
 
+// MARK: Tab
+
+/// The Week tab: this week (live), last week (closed report) or the 12-week grid.
+struct ReportTabView: View {
+    @Environment(RunStore.self) private var store
+
+    private var isEmpty: Bool {
+        store.reportThisWeek == nil && store.reportLastWeek == nil && store.reportHistory.isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            JoggaScreen {
+                if isEmpty {
+                    Card(spacing: 6) {
+                        Text("No report card yet").font(Jogga.rounded(.headline))
+                        Text("Go for a run and your weekly grades will show up here.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    ReportCardSection()
+                }
+            }
+            .navigationTitle("Week")
+            .refreshable { await store.refreshReportCards() }
+        }
+        .trackScreen(.report)
+    }
+}
+
 // MARK: Section
 
-/// Top of Progress: this week (live), last week (closed report) or the
-/// 12-week grade history.
 struct ReportCardSection: View {
     @Environment(RunStore.self) private var store
     @State private var tab: ReportCardTab = .thisWeek
@@ -129,7 +176,7 @@ struct ReportCardSection: View {
                     switch tab {
                     case .thisWeek: weekCard(store.reportThisWeek, empty: "No runs yet this week")
                     case .lastWeek: weekCard(store.reportLastWeek, empty: "No report for last week")
-                    case .trend: ReportTrendCard(weeks: store.reportHistory)
+                    case .trend: ReportTrendCard(weeks: store.reportHistory, onCell: open)
                     }
                 }
                 .transition(.opacity)
@@ -154,15 +201,7 @@ struct ReportCardSection: View {
     @ViewBuilder
     private func weekCard(_ card: ReportCard?, empty: String) -> some View {
         if let card {
-            ReportWeekCard(card: card) { row in
-                openRow = OpenRow(card: card, row: row)
-                Analytics.capture(.reportCardRowOpened, [
-                    "week": .string(card.weekStart),
-                    "status": .string(card.status),
-                    "category": .string(row.category),
-                    "grade": .string(row.grade ?? "none"),
-                ])
-            }
+            ReportWeekCard(card: card) { row in open(card, row) }
         } else {
             Card(spacing: 6) {
                 Text(empty).font(Jogga.rounded(.headline))
@@ -171,6 +210,16 @@ struct ReportCardSection: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func open(_ card: ReportCard, _ row: ReportCard.Row) {
+        openRow = OpenRow(card: card, row: row)
+        Analytics.capture(.reportCardRowOpened, [
+            "week": .string(card.weekStart),
+            "status": .string(card.status),
+            "category": .string(row.category),
+            "grade": .string(row.grade ?? "none"),
+        ])
     }
 
     private func track(_ tab: ReportCardTab) {
@@ -185,6 +234,9 @@ struct ReportCardSection: View {
             props["status"] = .string(card.status)
             props["kind"] = .string(card.kind)
             for row in card.rows { props["\(row.category)_grade"] = .string(row.grade ?? "none") }
+            if tab == .lastWeek, card.summary != nil {
+                UserDefaults.standard.set(card.weekStart, forKey: ReportCard.seenWeekKey)
+            }
         }
         Analytics.capture(.reportCardViewed, props)
     }
@@ -320,7 +372,7 @@ struct ReportRowView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            TrendArrow(trend: row.trend)
+            TrendArrow(trend: row.trend, was: row.was)
             GradePill(grade: row.grade)
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
@@ -329,8 +381,17 @@ struct ReportRowView: View {
         .padding(.vertical, 11)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(row.label), \(row.grade ?? "not graded yet"). \(row.metric)")
+        .accessibilityLabel(accessibilityText)
         .accessibilityHint("Shows what went into this")
+    }
+
+    private var accessibilityText: String {
+        var parts = ["\(row.label), \(row.grade ?? "not graded yet")."]
+        if let was = row.was, row.trend == "up" || row.trend == "down" {
+            parts.append("\(row.trend == "up" ? "Up" : "Down") from \(was) last week.")
+        }
+        parts.append(row.metric)
+        return parts.joined(separator: " ")
     }
 }
 
@@ -349,34 +410,24 @@ struct GradePill: View {
             )
     }
 
-    /// Calm scale: accent for good weeks, warm for "work on", never alarm red.
-    private var tint: Color {
-        switch grade {
-        case "A": .brand
-        case "B": .teal
-        case "C": .orange
-        default: .gray
-        }
-    }
+    private var tint: Color { ReportCard.tint(grade) }
 }
 
+/// Grade change since last week, e.g. "↑ from C". Sits by the pill so it
+/// reads as the grade moving, not the metric.
 struct TrendArrow: View {
     var trend: String?
+    var was: String?
 
     var body: some View {
-        switch trend {
-        case "up":
-            Image(systemName: "arrow.up.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.brand)
-                .accessibilityLabel("Up from last week")
-        case "down":
-            Image(systemName: "arrow.down.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Down from last week")
-        default:
-            EmptyView()
+        if trend == "up" || trend == "down" {
+            HStack(spacing: 2) {
+                Image(systemName: trend == "up" ? "arrow.up" : "arrow.down")
+                    .font(.caption2.weight(.bold))
+                if let was { Text("from \(was)").font(.caption2.weight(.semibold)) }
+            }
+            .foregroundStyle(trend == "up" ? Color.brand : Color.secondary)
+            .accessibilityLabel("\(trend == "up" ? "Up" : "Down") from \(was ?? "last week")")
         }
     }
 }
@@ -431,8 +482,10 @@ struct ReportRowSheet: View {
 // MARK: Trend
 
 /// One row per category, one cell per week (oldest left). Rest weeks are blank.
+/// Tapping a graded cell opens that week's row detail.
 struct ReportTrendCard: View {
     var weeks: [ReportCard]
+    var onCell: (ReportCard, ReportCard.Row) -> Void = { _, _ in }
 
     private var ordered: [ReportCard] { weeks.reversed() }
     private let categories = ["consistency", "pacing", "balance", "load", "progress"]
@@ -463,10 +516,23 @@ struct ReportTrendCard: View {
                                 .fixedSize()
                             HStack(spacing: 4) {
                                 ForEach(ordered) { week in
-                                    cell(week.isRest ? nil : week.row(category)?.grade, rest: week.isRest)
+                                    weekCell(week, category)
                                 }
                             }
                         }
+                    }
+                    GridRow {
+                        Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                        HStack {
+                            if let first = ordered.first { Text(first.shortWeek) }
+                            Spacer()
+                            if let last = ordered.last {
+                                Text(last.isLive ? "This week" : last.shortWeek)
+                            }
+                        }
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, -6)
                     }
                 }
                 HStack(spacing: 14) {
@@ -477,7 +543,7 @@ struct ReportTrendCard: View {
                         }
                     }
                     Spacer()
-                    Text("Blank = rest or not enough data")
+                    Text("Blank = rest or not graded")
                 }
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
@@ -487,6 +553,22 @@ struct ReportTrendCard: View {
 
     private func label(_ category: String) -> String {
         weeks.first?.row(category)?.label ?? category.capitalized
+    }
+
+    @ViewBuilder
+    private func weekCell(_ week: ReportCard, _ category: String) -> some View {
+        if !week.isRest, let row = week.row(category), row.grade != nil {
+            Button { onCell(week, row) } label: {
+                cell(row.grade, rest: false)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressableStyle(scale: 0.9))
+            .padding(.vertical, -4)
+            .accessibilityLabel("\(row.label), week of \(week.shortWeek), \(row.grade ?? "")")
+        } else {
+            cell(nil, rest: week.isRest)
+        }
     }
 
     private func cell(_ grade: String?, rest: Bool) -> some View {
@@ -502,7 +584,7 @@ struct ReportTrendCard: View {
         case "A": .brand
         case "B": .teal.opacity(0.75)
         case "C": .orange.opacity(0.7)
-        case "D": .gray.opacity(0.55)
+        case "D": ReportCard.tint("D").opacity(0.85)
         default: Color(.tertiarySystemFill)
         }
     }

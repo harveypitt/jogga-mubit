@@ -100,7 +100,9 @@ struct RootView: View {
 }
 
 struct MainTabView: View {
+    @Environment(RunStore.self) private var store
     @State private var selection = 0
+    @AppStorage(ReportCard.seenWeekKey) private var seenReportWeek = ""
 
     init() {
         #if DEBUG
@@ -108,7 +110,7 @@ struct MainTabView: View {
         if let index = arguments.firstIndex(of: "-startTab"),
            arguments.indices.contains(index + 1),
            let tab = Int(arguments[index + 1]),
-           (0...2).contains(tab) {
+           (0...3).contains(tab) {
             _selection = State(initialValue: tab)
         }
         #endif
@@ -119,6 +121,10 @@ struct MainTabView: View {
             RunTabView()
                 .tabItem { Label("Run", systemImage: "figure.run") }
                 .tag(0)
+            ReportTabView()
+                .tabItem { Label("Week", systemImage: "list.bullet.clipboard") }
+                .badge(newReport ? 1 : 0)
+                .tag(3)
             ProgressTabView()
                 .tabItem { Label("Progress", systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(1)
@@ -127,5 +133,11 @@ struct MainTabView: View {
                 .tag(2)
         }
         .tint(.brand)
+    }
+
+    /// Last week's summary is in and hasn't been opened yet.
+    private var newReport: Bool {
+        guard let last = store.reportLastWeek, last.summary != nil else { return false }
+        return last.weekStart != seenReportWeek
     }
 }
