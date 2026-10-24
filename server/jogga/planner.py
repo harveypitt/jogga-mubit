@@ -709,7 +709,8 @@ async def sync_plan(
         ]
         row.sessions = all_sessions
         if why == "regenerate":
-            row.original_count = len(all_sessions)
+            # New history can add runs to the week, never take them off the grade.
+            row.original_count = max(row.original_count, len(all_sessions))
         row.replanned_on = f.today
         row.needs_replan = False
     row.note = note if note is not None else row.note
