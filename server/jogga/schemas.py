@@ -1,7 +1,7 @@
 """Pydantic schemas for request/response bodies and coach output."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -231,3 +231,24 @@ class SurveyIn(BaseModel):
     injury_area: InjuryArea | None = None
     injury_severity: InjurySeverity | None = None
     notes: str | None = Field(default=None, max_length=500)
+
+
+Goal = Literal["5k", "10k", "half", "marathon", "fitness"]
+Experience = Literal["new", "returning", "regular"]
+Dislike = Literal["track", "intervals", "hills", "long_runs", "tempo"]
+
+
+class ProfileIn(BaseModel):
+    """Onboarding answers. Niggles stay in Postgres and the planner, never analytics."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    goal: Goal | None = None
+    race_date: date | None = None
+    days: list[int] = Field(default_factory=list, max_length=7)
+    runs_per_week: int | None = Field(default=None, ge=1, le=7)
+    experience: Experience | None = None
+    usual_week_km: float | None = Field(default=None, ge=0, le=300)
+    dislikes: list[Dislike] = Field(default_factory=list, max_length=5)
+    niggles: str | None = Field(default=None, max_length=300)
+    consent: bool = False

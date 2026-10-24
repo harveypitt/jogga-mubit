@@ -9,7 +9,7 @@ from typing import Annotated, Literal, cast
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import delete, func, select, tuple_
+from sqlalchemy import delete, func, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +23,17 @@ from .auth import (
 )
 from .coach import coach_run
 from .db import get_session
-from .models import CoachNote, ReportCard, Run, RunSurvey, Session, Target, User
+from .models import (
+    CoachNote,
+    ReportCard,
+    Run,
+    RunnerProfile,
+    RunSurvey,
+    Session,
+    Target,
+    User,
+    WeekPlan,
+)
 from .planner import flag_injury, newest_import, plan_out, sync_plan
 from .posthog import get_posthog_client, initialize_posthog
 from .report_card import grade_weeks
@@ -34,6 +44,7 @@ from .schemas import (
     CoachOutput,
     DevAuthIn,
     ImportSource,
+    ProfileIn,
     RunImportIn,
     RunImportOut,
     RunIn,
@@ -393,6 +404,37 @@ async def put_survey(run_id: uuid.UUID, body: SurveyIn, user: Authed, db: DB) ->
     )
     if body.injury:
         await flag_injury(db, user.id, run)
+    await db.commit()
+    return {"ok": True}
+
+
+@app.get("/me/profile")
+async def get_profile(user: Authed, db: DB) -> dict[str, object]:
+    p = await db.get(RunnerProfile, user.id)
+    if p is None:
+        return {"onboarded": False}
+    return {"onboarded": True, **{k: getattr(p, k) for k in ProfileIn.model_fields}}
+
+
+@app.put("/me/profile")
+async def put_profile(body: ProfileIn, user: Authed, db: DB) -> dict[str, bool]:
+    """Onboarding answers. The rest of this week is replanned around them on the next read."""
+    answers = body.model_dump()
+    answers["days"] = sorted({d for d in body.days if 0 <= d <= 6})
+    answers["dislikes"] = sorted(set(body.dislikes))
+    answers["niggles"] = (body.niggles or "").strip() or None
+    stmt = insert(RunnerProfile).values(user_id=user.id, **answers)
+    await db.execute(
+        stmt.on_conflict_do_update(
+            index_elements=[RunnerProfile.user_id],
+            set_={**{k: stmt.excluded[k] for k in answers}, "updated_at": func.now()},
+        )
+    )
+    await db.execute(
+        update(WeekPlan)
+        .where(WeekPlan.user_id == user.id, WeekPlan.week_start >= date.today() - timedelta(days=7))
+        .values(needs_replan=True, replanned_on=None)
+    )
     await db.commit()
     return {"ok": True}
 

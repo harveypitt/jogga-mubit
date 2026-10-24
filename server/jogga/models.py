@@ -183,3 +183,28 @@ class RunSurvey(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class RunnerProfile(Base):
+    """Onboarding answers: goal, when they can run and what to avoid. The planner treats
+    days, runs a week and dislikes as hard rules."""
+
+    __tablename__ = "runner_profiles"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    goal: Mapped[str | None] = mapped_column(Text)
+    race_date: Mapped[date | None] = mapped_column(Date)
+    # Weekdays they can run, 0 = Monday.
+    days: Mapped[list[int]] = mapped_column(JSONB, server_default="[]")
+    runs_per_week: Mapped[int | None] = mapped_column(Integer)
+    experience: Mapped[str | None] = mapped_column(Text)
+    usual_week_km: Mapped[float | None] = mapped_column(Float)
+    dislikes: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    niggles: Mapped[str | None] = mapped_column(Text)
+    consent: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

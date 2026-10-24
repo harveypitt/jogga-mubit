@@ -350,3 +350,39 @@ def test_hard_sessions_stay_near_a_fifth_of_the_week() -> None:
     raw = plan_json((0, "tempo", 6, "5:20"), (2, "easy", 5, "6:50"), (4, "intervals", 6, "5:00"))
     with pytest.raises(ValueError, match="over 20%"):
         check_plan(raw, mk_facts(avg4w_km=30.0))
+
+
+def test_onboarding_rules_are_hard_rules() -> None:
+    f = mk_facts(banned=frozenset({"intervals"}), max_runs=2)
+    with pytest.raises(ValueError, match="asked to avoid"):
+        check_plan(plan_json((0, "intervals", 5, "5:00")), f)
+    with pytest.raises(ValueError, match="at most 2"):
+        check_plan(plan_json(*((d, "easy", 5, "6:50") for d in (0, 2, 4))), f)
+    assert len(fallback_plan(f)) == 2
+
+
+async def test_profile_round_trips_and_shapes_the_plan(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    assert (await client.get("/me/profile", headers=auth)).json() == {"onboarded": False}
+    body = {
+        "goal": "10k",
+        "days": [5, 1, 1],
+        "runs_per_week": 2,
+        "experience": "regular",
+        "usual_week_km": 15,
+        "dislikes": ["track"],
+        "niggles": "  Left knee  ",
+        "consent": True,
+    }
+    assert (await client.put("/me/profile", json=body, headers=auth)).status_code == 200
+    got = (await client.get("/me/profile", headers=auth)).json()
+    assert got["onboarded"] and got["days"] == [1, 5] and got["niggles"] == "Left knee"
+    bad = await client.put("/me/profile", json={"experience": "pro"}, headers=auth)
+    assert bad.status_code == 422
+    await client.post("/runs", json=run_payload(run_id=uuid.uuid4()), headers=auth)
+    plan = (await client.get("/plan/current", headers=auth)).json()["plan"]
+    planned = [s for s in plan["sessions"] if s["status"] == "planned"]
+    assert all(date.fromisoformat(s["date"]).weekday() in (1, 5) for s in planned)
+    assert all(s["kind"] != "intervals" for s in planned)
+    assert len(planned) <= 2

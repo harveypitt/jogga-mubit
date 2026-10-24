@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import config
 from .coach import LLMClient, LLMResult, OpenRouterClient
 from .fitness import fitness, fmt_dur, parse_pace, split_pace
-from .models import CoachNote, ReportCard, Run, RunSurvey, Target, WeekPlan
+from .models import CoachNote, ReportCard, Run, RunnerProfile, RunSurvey, Target, WeekPlan
 from .packet import _format_fit, fit_source
 from .weeks import local_date, local_week, valid_tz
 
@@ -69,7 +69,7 @@ INJURY_SEVERITY = ("niggle", "sore", "stopped")
 FEEL_DAYS = 14
 INJURY_DAYS = 7
 # Packet keys the LLM sees but analytics never does (health data and free text).
-PRIVATE_KEYS = ("feel", "injury", "rest_until", "see_physio")
+PRIVATE_KEYS = ("feel", "injury", "rest_until", "see_physio", "profile")
 
 
 class LLMSession(BaseModel):
@@ -116,6 +116,10 @@ class Facts:
     target_km: float | None = None
     rest_until: date | None = None
     see_physio: bool = False
+    # From onboarding: kinds they asked to avoid, and the most runs a week they want.
+    banned: frozenset[str] = frozenset()
+    max_runs: int | None = None
+    profile: dict[str, Any] | None = None
 
     @property
     def run_cap(self) -> float:
@@ -167,6 +171,7 @@ def facts(
     prev_count: int | None,
     from_day: date | None = None,
     surveys: list[RunSurvey] | None = None,
+    profile: RunnerProfile | None = None,
 ) -> Facts:
     """``from_day`` is the first day a new session may go on (default today)."""
     today = local_date(now, tz)
@@ -212,6 +217,15 @@ def facts(
         rpw = max(2, min(4, round(len(recent) / 4)))
     else:
         rpw = DEFAULT_RUNS_PER_WEEK
+    if profile is not None:
+        if profile.runs_per_week:
+            rpw = profile.runs_per_week
+        if profile.experience == "new":
+            beginner = True
+        elif profile.experience == "regular" and (profile.usual_week_km or 0) >= BEGINNER_WEEK_KM:
+            beginner = False
+        if not before and profile.usual_week_km:
+            avg4w = float(profile.usual_week_km)
     wk = []
     for i in range(8):
         monday = ws - timedelta(weeks=7 - i)
@@ -247,6 +261,8 @@ def facts(
     rest_until = max(stops) + timedelta(days=STOP_REST_DAYS) if stops else None
     if rest_until is not None:
         days_left = [d for d in days_left if d > rest_until]
+    if profile is not None and profile.days:
+        days_left = [d for d in days_left if d.weekday() in profile.days]
     window = [
         (started.get(s.run_id, s.created_at), s)
         for s in surveys or []
@@ -267,6 +283,11 @@ def facts(
         see_physio=sum(1 for _, s in window if s.injury) >= PHYSIO_REPORTS,
         injury=injury,
         feel=feel,
+        banned=frozenset(
+            k for d in (profile.dislikes if profile else []) for k in DISLIKE_KINDS.get(d, ())
+        ),
+        max_runs=profile.runs_per_week if profile else None,
+        profile=_profile_packet(profile),
         today=today,
         week_start=ws,
         days_left=days_left,
@@ -282,6 +303,28 @@ def facts(
         fit=fit,
         wk=wk,
     )
+
+
+DISLIKE_KINDS = {
+    "track": ("intervals",),
+    "intervals": ("intervals",),
+    "tempo": ("tempo",),
+    "long_runs": ("long",),
+}
+
+
+def _profile_packet(p: RunnerProfile | None) -> dict[str, Any] | None:
+    if p is None:
+        return None
+    return {
+        "goal": p.goal,
+        "race_date": p.race_date.isoformat() if p.race_date else None,
+        "days": [WEEKDAYS[d] for d in p.days],
+        "runs_per_week": p.runs_per_week,
+        "experience": p.experience,
+        "dislikes": p.dislikes or None,
+        "niggles": p.niggles,
+    }
 
 
 def growth_factor(feelings: list[str], injury: str | None, beginner: bool) -> float:
@@ -339,6 +382,8 @@ def cap_sessions(f: Facts, budget_count: int | None) -> int:
     n = len(f.days_left)
     if f.injury == "stopped":
         n = min(n, STOP_MAX_SESSIONS)
+    if f.max_runs is not None:
+        n = min(n, max(0, f.max_runs - len(f.done)))
     return n if budget_count is None else min(n, budget_count)
 
 
@@ -363,6 +408,8 @@ def check_plan(
             raise ValueError(f"{s.km} km is over the {f.run_cap} km cap")
         if s.km < f.min_km - KM_SLACK:
             raise ValueError(f"{s.km} km is under the {f.min_km} km minimum")
+        if s.kind in f.banned:
+            raise ValueError(f"{s.kind} is a kind of run they asked to avoid")
         pace = parse_pace(s.pace)
         _check_pace(s.kind, pace, f)
         detail, why = s.detail.strip(), s.why.strip()
@@ -419,7 +466,7 @@ def fallback_plan(
         _session(days[i], "easy", km, easy, f"Easy {km:g} km, conversational.", _FALLBACK_WHY)
         for i in idx
     ]
-    if n >= 2 and f.zones is not None:
+    if n >= 2 and f.zones is not None and "tempo" not in f.banned:
         mid = sessions[n // 2]
         tempo = dict(mid, kind="tempo", pace=int(f.zones["tempo"]))
         tempo["detail"] = f"{km:g} km with the middle part at {fmt_dur(tempo['pace'])}/km."
@@ -507,6 +554,7 @@ def plan_packet(
         "report": report,
         "feel": f.feel or None,
         "injury": f.injury,
+        "profile": f.profile,
         "rest_until": f.rest_until.isoformat() if f.rest_until else None,
         "see_physio": f.see_physio,
         "done": [
@@ -722,7 +770,8 @@ async def sync_plan(
             )
         ).all()
     )
-    f = facts(runs, zone, now, prev_count, surveys=surveys)
+    profile = await db.get(RunnerProfile, user_id)
+    f = facts(runs, zone, now, prev_count, surveys=surveys, profile=profile)
     if row is not None:
         match_runs(row, f)
     if row is None:
