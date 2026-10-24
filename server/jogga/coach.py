@@ -300,11 +300,13 @@ class OpenRouterClient:
         model: str,
         http: httpx.AsyncClient | None = None,
         url: str | None = None,
+        extra_headers: dict[str, str] | None = None,
     ) -> None:
         self._api_key = api_key
         self._model = model
         self._http = http
         self._url = url or config.OPENROUTER_URL
+        self._extra_headers = extra_headers or {}
 
     async def complete(self, system: str, user: str) -> LLMResult:
         if self._http is not None:
@@ -313,12 +315,14 @@ class OpenRouterClient:
             return await self._complete(client, system, user)
 
     async def _complete(self, http: httpx.AsyncClient, system: str, user: str) -> LLMResult:
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "X-OpenRouter-Title": "Jogga",
+        }
+        headers.update(self._extra_headers)
         resp = await http.post(
             self._url,
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "X-OpenRouter-Title": "Jogga",
-            },
+            headers=headers,
             json=request_body(self._model, system, user),
         )
         if resp.status_code >= 400:

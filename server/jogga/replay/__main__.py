@@ -1,4 +1,4 @@
-"""python -m jogga.replay --export DIR --coach {heuristic,openrouter,mubit} --out DIR
+"""python -m jogga.replay --export DIR --coach {heuristic,openrouter,mubit,mubit-norecord} --out DIR
 
 Replays a Strava export into a throwaway database, oldest run first, as if each run had
 just been logged in the app (mode "free": nobody was following a Jogga plan). After each
@@ -36,6 +36,15 @@ def _client(coach: str) -> LLMClient | None:
         if not config.MUBIT_API_KEY:
             raise SystemExit("MUBIT_API_KEY is not set")
         return OpenRouterClient(config.MUBIT_API_KEY, config.LLM_MODEL, url=config.MUBIT_URL)
+    if coach == "mubit-norecord":
+        if not config.MUBIT_API_KEY:
+            raise SystemExit("MUBIT_API_KEY is not set")
+        return OpenRouterClient(
+            config.MUBIT_API_KEY,
+            config.LLM_MODEL,
+            url=config.MUBIT_URL,
+            extra_headers={"x-middleware-record": "off"},
+        )
     if coach == "openrouter":
         if not config.OPENROUTER_API_KEY:
             raise SystemExit("OPENROUTER_API_KEY is not set")
@@ -111,7 +120,7 @@ async def replay(args: argparse.Namespace) -> None:
         }
         coach_names = {runner["coach"] for runner in runner_specs}
         clients: dict[str, LLMClient | None] = {}
-        for name in ("mubit", "openrouter"):
+        for name in ("mubit", "mubit-norecord", "openrouter"):
             if name in coach_names:
                 clients[name] = _client(name)
         if "heuristic" in coach_names:
@@ -332,11 +341,15 @@ def main() -> None:
         default=Path.home() / "endomondo" / "endomondoHR_proper.json",
         help="Endomondo dict-literal data file",
     )
-    p.add_argument("--coach", choices=["heuristic", "openrouter", "mubit"], default="heuristic")
+    p.add_argument(
+        "--coach",
+        choices=["heuristic", "openrouter", "mubit", "mubit-norecord"],
+        default="heuristic",
+    )
     p.add_argument(
         "--holdout-coach",
-        choices=["heuristic", "openrouter", "mubit"],
-        default="openrouter",
+        choices=["heuristic", "openrouter", "mubit", "mubit-norecord"],
+        default="mubit-norecord",
         help="coach used for holdout Endomondo runners",
     )
     p.add_argument("--out", type=Path, required=True)

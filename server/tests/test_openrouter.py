@@ -143,12 +143,13 @@ async def test_request_shape() -> None:
 
 
 async def test_mubit_url_and_request_id() -> None:
-    seen: dict[str, str] = {}
+    seen: dict[str, str | None] = {}
     url = "https://api.mubit.ai/compat/openrouter/v1/chat/completions"
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen["url"] = str(request.url)
         seen["auth"] = request.headers["authorization"]
+        seen["record"] = request.headers.get("x-middleware-record")
         return httpx.Response(
             200,
             headers={"x-middleware-request-id": "mreq_test"},
@@ -160,8 +161,41 @@ async def test_mubit_url_and_request_id() -> None:
     out = await client.complete("SYS", "PKT")
     await http.aclose()
 
-    assert seen == {"url": url, "auth": "Bearer mbt-test-key"}
+    assert seen == {"url": url, "auth": "Bearer mbt-test-key", "record": None}
     assert out.request_id == "mreq_test"
+
+
+async def test_extra_headers_are_sent() -> None:
+    seen: dict[str, str | None] = {}
+    url = "https://api.mubit.ai/compat/openrouter/v1/chat/completions"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["auth"] = request.headers["authorization"]
+        seen["title"] = request.headers["x-openrouter-title"]
+        seen["record"] = request.headers.get("x-middleware-record")
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": json.dumps(VALID_OUTPUT)}}]},
+        )
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    client = OpenRouterClient(
+        "mbt-test-key",
+        "model",
+        http=http,
+        url=url,
+        extra_headers={"x-middleware-record": "off"},
+    )
+    await client.complete("SYS", "PKT")
+    await http.aclose()
+
+    assert seen == {
+        "url": url,
+        "auth": "Bearer mbt-test-key",
+        "title": "Jogga",
+        "record": "off",
+    }
 
 
 def test_request_body_reasoning(monkeypatch: Any) -> None:
