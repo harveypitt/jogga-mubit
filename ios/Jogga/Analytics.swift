@@ -27,6 +27,7 @@ enum AnalyticsEvent: String {
     case runSurveySkipped = "run_survey_skipped"
     case onboardingCompleted = "onboarding_completed"
     case onboardingSkipped = "onboarding_skipped"
+    case locationPermission = "location_permission"
 }
 
 enum Screen: String {

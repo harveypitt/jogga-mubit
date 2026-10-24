@@ -12,11 +12,6 @@ struct RunTabView: View {
     @State private var mode: CoachMode?
     @State private var breathe = false
 
-    private var firstTargetDue: Bool {
-        store.hasSyncedMe && store.targets.isEmpty && store.profile?.onboarded == true
-            && !store.onboardingVisible && recorder.state == .idle && !showActiveRun
-    }
-
     private struct TargetRoute: Identifiable {
         var distance: String
         var id: String { distance }
@@ -68,14 +63,6 @@ struct RunTabView: View {
                 CoachLineProvider.generate(
                     mode: mode ?? defaultMode, store: store
                 )
-            }
-            .task(id: "\(store.hasSyncedMe) \(store.profile?.onboarded == true) \(store.onboardingVisible)") {
-                // First target prompt waits until onboarding is finished and closed.
-                guard firstTargetDue else { return }
-                try? await Task.sleep(for: .milliseconds(900))
-                guard firstTargetDue else { return }
-                let goal = store.profile?.goal ?? "5k"
-                targetSheet = TargetRoute(distance: goal == "fitness" ? "5k" : goal)
             }
             .onChange(of: mode) { _, new in
                 CoachLineProvider.generate(mode: new ?? defaultMode, store: store)

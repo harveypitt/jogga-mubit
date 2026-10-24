@@ -66,7 +66,8 @@ struct JoggaApp: App {
                     }
                 }
                 .onAppear {
-                    recorder.requestAuthorization()
+                    // New runners are asked on onboarding's location screen instead.
+                    if auth.signedIn { recorder.requestAuthorization() }
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("-demoRun") {
                         if let next = store.nextSession {
@@ -94,9 +95,31 @@ struct RootView: View {
     @State private var showOnboarding = false
     #endif
 
+    @State private var inOnboarding = false
+    @State private var showSignIn = false
+
+    #if DEBUG
+    private static let demoIntroPreview = ProcessInfo.processInfo.arguments.contains("-demoIntroPreview")
+    private static let onboardingStep: OnboardingView.Step? = {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-onboardingStep"), i + 1 < args.count,
+              let n = Int(args[i + 1]) else { return nil }
+        return OnboardingView.Step(rawValue: n)
+    }()
+    #else
+    private static let demoIntroPreview = false
+    private static let onboardingStep: OnboardingView.Step? = nil
+    #endif
+
     var body: some View {
         Group {
-            if auth.signedIn {
+            if Self.demoIntroPreview {
+                DemoIntroView(onStart: {}, onSignIn: {})
+            } else if let step = Self.onboardingStep {
+                OnboardingView(previewStep: step)
+            } else if inOnboarding {
+                OnboardingView(onFinish: { inOnboarding = false })
+            } else if auth.signedIn {
                 MainTabView()
                     .fullScreenCover(isPresented: $showOnboarding) { OnboardingView() }
                     .onChange(of: store.needsOnboarding, initial: true) { _, needs in
@@ -105,10 +128,13 @@ struct RootView: View {
                     .onChange(of: showOnboarding, initial: true) { _, shown in
                         store.onboardingVisible = shown
                     }
-            } else {
+            } else if showSignIn {
                 SignInView()
+            } else {
+                DemoIntroView(onStart: { inOnboarding = true }, onSignIn: { showSignIn = true })
             }
         }
+        .animation(.smooth(duration: 0.4), value: inOnboarding)
     }
 }
 

@@ -40,11 +40,13 @@
 		5EAFC564BD33083F09F37FFA /* llama.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 170D72C26C90840E8D99F68B /* llama.xcframework */; };
 		6773CF1C04782BB85B6CC478 /* RunRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30542316765693AAFA2F7E17 /* RunRecorder.swift */; };
 		6F1BE6EE486B587DC9286B61 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F3911FF8381F09DAF04BB04 /* Assets.xcassets */; };
+		7270C3014A4558D30C4663C9 /* DemoIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD5FA928D7FAF3C6F57432BD /* DemoIntroView.swift */; };
 		783C46293F8085C19F782541 /* onnxruntime in Frameworks */ = {isa = PBXBuildFile; productRef = E2C37DEF7E3D2439B6CFE430 /* onnxruntime */; };
 		78B0FC3C3D71D63B3D5D6002 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FBBE8C51E5A3836BA5DC0F2 /* OnboardingView.swift */; };
 		793488A5F163CF98547DCFAE /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A7098E3F58248DCEC35B9FF /* AuthStore.swift */; };
 		7B58A773AB7BCE860C473BAE /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761C0F9E1DBD4912FBA11332 /* SettingsView.swift */; };
 		7B6D53C87A2DBEDC1910D07B /* SystemVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C0608C75AFA25EE0245C17 /* SystemVoice.swift */; };
+		7DED07ABB7725653AD0B007B /* demo-route.json in Resources */ = {isa = PBXBuildFile; fileRef = 18063140ACA2DEFB0292167A /* demo-route.json */; };
 		84C5789BDAF28A0B1720A095 /* CueEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287D93A39C5A383ACD4887F6 /* CueEngineTests.swift */; };
 		88E16AE03A12C9757A470664 /* Activity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E75A87FA6754063B68EB280 /* Activity.swift */; };
 		896550EA158C651B7CBBF349 /* RunContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B7DA6B7AE42971547449201 /* RunContext.swift */; };
@@ -131,6 +133,7 @@
 		1423D000E40EAB0C8945753A /* VoiceModels */ = {isa = PBXFileReference; lastKnownFileType = folder; name = VoiceModels; path = Jogga/VoiceModels; sourceTree = SOURCE_ROOT; };
 		164499444F4F8892257C7785 /* JoggaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoggaApp.swift; sourceTree = "<group>"; };
 		170D72C26C90840E8D99F68B /* llama.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama.xcframework; path = Vendor/llama.xcframework; sourceTree = "<group>"; };
+		18063140ACA2DEFB0292167A /* demo-route.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "demo-route.json"; sourceTree = "<group>"; };
 		1A4813E2995E8CD26C02DCB0 /* CoachReplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachReplayView.swift; sourceTree = "<group>"; };
 		26067577B88D2BD0718A8031 /* SpokenNumbers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpokenNumbers.swift; sourceTree = "<group>"; };
 		26833A6E4F6A6FBDF3A45D8A /* ActiveRunView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveRunView.swift; sourceTree = "<group>"; };
@@ -194,6 +197,7 @@
 		EC4E0C3055FFD0BBAB42D4DF /* ProgressTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressTabView.swift; sourceTree = "<group>"; };
 		F47AD7D9C0B2A9B6B3DB6BD7 /* CueSimulator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CueSimulator.swift; sourceTree = "<group>"; };
 		F6C0608C75AFA25EE0245C17 /* SystemVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemVoice.swift; sourceTree = "<group>"; };
+		FD5FA928D7FAF3C6F57432BD /* DemoIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoIntroView.swift; sourceTree = "<group>"; };
 		FEC84F56E762FD07CEF6E068 /* NeuTTSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeuTTSTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -214,6 +218,7 @@
 		2C4B458B708002D1A3E73F54 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				18063140ACA2DEFB0292167A /* demo-route.json */,
 				B73EEEE0919D3E267114240D /* sophie.ref.json */,
 				0AE6B259F228F366C4359E96 /* steven.ref.json */,
 			);
@@ -311,6 +316,7 @@
 				4A5FA894E34585E2D510FF02 /* APIClient.swift */,
 				9F3911FF8381F09DAF04BB04 /* Assets.xcassets */,
 				6A7098E3F58248DCEC35B9FF /* AuthStore.swift */,
+				FD5FA928D7FAF3C6F57432BD /* DemoIntroView.swift */,
 				E29CA70363B02C9B13CA9585 /* DemoSeed.swift */,
 				4B32D7CD276071CB1720FC8D /* HistoryTabView.swift */,
 				CE4C63F6A00D30E3C377B3CD /* Info.plist */,
@@ -501,6 +507,7 @@
 			files = (
 				6F1BE6EE486B587DC9286B61 /* Assets.xcassets in Resources */,
 				A336881EB95D260BC189384C /* VoiceModels in Resources */,
+				7DED07ABB7725653AD0B007B /* demo-route.json in Resources */,
 				9221DC86FEAA8590724B7936 /* sophie.ref.json in Resources */,
 				578979E71B6FE5959BABADD7 /* steven.ref.json in Resources */,
 			);
@@ -558,6 +565,7 @@
 				1F4BE9F2ED9DA56DDA23C30E /* CueQueue.swift in Sources */,
 				57AA71250EA3C356E52DCF40 /* CueSimulator.swift in Sources */,
 				3FBA2481CBAC8FEF7F67D57C /* CueTrack.swift in Sources */,
+				7270C3014A4558D30C4663C9 /* DemoIntroView.swift in Sources */,
 				F578928F5D60C965C317E1B6 /* DemoSeed.swift in Sources */,
 				E4679885E12DCC876FF6B25B /* GPXParser.swift in Sources */,
 				031E969B53301CAF8C130A7C /* HistoryTabView.swift in Sources */,

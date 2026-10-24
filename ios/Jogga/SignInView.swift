@@ -27,35 +27,7 @@ struct SignInView: View {
             Spacer()
             Spacer()
             VStack(spacing: 14) {
-                SignInWithAppleButton(.signIn) { request in
-                    Analytics.capture(.signInStarted, ["method": .string("apple")])
-                    request.requestedScopes = [.fullName]
-                } onCompletion: { result in
-                    switch result {
-                    case .success(let authorization):
-                        if let credential = authorization.credential as? ASAuthorizationAppleIDCredential {
-                            let name = [credential.fullName?.givenName, credential.fullName?.familyName]
-                                .compactMap { $0 }
-                                .joined(separator: " ")
-                            Task {
-                                await auth.signInWithApple(
-                                    credential: credential,
-                                    name: name.isEmpty ? nil : name
-                                )
-                            }
-                        }
-                    case .failure(let error):
-                        let cancelled = (error as? ASAuthorizationError)?.code == .canceled
-                        Analytics.capture(.signInFailed, [
-                            "method": .string("apple"),
-                            "reason": .string(cancelled ? "cancelled" : "apple_error"),
-                        ])
-                    }
-                }
-                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                .frame(height: 54)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .accessibilityLabel("Sign in with Apple")
+                AppleSignInButton()
                 #if DEBUG
                 Button("Continue without Apple") {
                     Analytics.capture(.signInStarted, ["method": .string("dev")])
@@ -96,5 +68,43 @@ struct SignInView: View {
             }
             .shadow(color: .black.opacity(0.12), radius: 18, y: 8)
             .accessibilityHidden(true)
+    }
+}
+
+/// Sign in with Apple, shared by the sign-in screen and the end of onboarding.
+struct AppleSignInButton: View {
+    @Environment(AuthStore.self) private var auth
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        SignInWithAppleButton(.signIn) { request in
+            Analytics.capture(.signInStarted, ["method": .string("apple")])
+            request.requestedScopes = [.fullName]
+        } onCompletion: { result in
+            switch result {
+            case .success(let authorization):
+                if let credential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                    let name = [credential.fullName?.givenName, credential.fullName?.familyName]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
+                    Task {
+                        await auth.signInWithApple(
+                            credential: credential,
+                            name: name.isEmpty ? nil : name
+                        )
+                    }
+                }
+            case .failure(let error):
+                let cancelled = (error as? ASAuthorizationError)?.code == .canceled
+                Analytics.capture(.signInFailed, [
+                    "method": .string("apple"),
+                    "reason": .string(cancelled ? "cancelled" : "apple_error"),
+                ])
+            }
+        }
+        .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+        .frame(height: 54)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityLabel("Sign in with Apple")
     }
 }

@@ -236,10 +236,13 @@ struct RunnerProfile: Codable, Hashable {
     var usualWeekKm: Double?
     var dislikes: [String] = []
     var niggles: String?
+    var blocker: String?
+    var heardFrom: String?
     var consent = false
 
     enum CodingKeys: String, CodingKey {
-        case onboarded, goal, days, experience, dislikes, niggles, consent
+        case onboarded, goal, days, experience, dislikes, niggles, blocker, consent
+        case heardFrom = "heard_from"
         case raceDate = "race_date", runsPerWeek = "runs_per_week", usualWeekKm = "usual_week_km"
     }
 
@@ -256,6 +259,8 @@ struct RunnerProfile: Codable, Hashable {
         usualWeekKm = try c.decodeIfPresent(Double.self, forKey: .usualWeekKm)
         dislikes = try c.decodeIfPresent([String].self, forKey: .dislikes) ?? []
         niggles = try c.decodeIfPresent(String.self, forKey: .niggles)
+        blocker = try c.decodeIfPresent(String.self, forKey: .blocker)
+        heardFrom = try c.decodeIfPresent(String.self, forKey: .heardFrom)
         consent = try c.decodeIfPresent(Bool.self, forKey: .consent) ?? false
     }
 
@@ -267,6 +272,8 @@ struct RunnerProfile: Codable, Hashable {
         if let experience { out["experience"] = experience }
         if let usualWeekKm { out["usual_week_km"] = usualWeekKm }
         if let niggles, !niggles.isEmpty { out["niggles"] = String(niggles.prefix(300)) }
+        if let blocker { out["blocker"] = blocker }
+        if let heardFrom { out["heard_from"] = heardFrom }
         return out
     }
 
