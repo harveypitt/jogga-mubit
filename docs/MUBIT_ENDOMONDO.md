@@ -143,6 +143,13 @@ zero. The coach easily beats "repeat your last run" but only ties the median of
 the last 5. Next-run distance mostly reflects what a runner decides to do that
 day, which the history can't predict. We don't claim forecasting skill.
 
+### What Mubit did with it
+
+Mubit grouped the Sol calls into a new task ("Jogga's running coach 3", 641
+calls, all `openai/gpt-6.1-sol`). It kept 34 of them as examples, since Mubit
+chooses which recorded calls to keep, and started training adapter v1 on
+Qwen3-4B. We'll add v1's test results here once Mubit has scored it.
+
 ### Earlier attempt: one runner, DeepSeek teacher
 
 Before Endomondo we replayed one runner's own Strava history (66 runs) with
