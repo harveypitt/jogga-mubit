@@ -203,6 +203,9 @@ class RunnerProfile(Base):
     usual_week_km: Mapped[float | None] = mapped_column(Float)
     dislikes: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
     niggles: Mapped[str | None] = mapped_column(Text)
+    # What usually stops them running; sets the planner's tone.
+    blocker: Mapped[str | None] = mapped_column(Text)
+    heard_from: Mapped[str | None] = mapped_column(Text)
     consent: Mapped[bool] = mapped_column(Boolean, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

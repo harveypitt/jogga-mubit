@@ -361,6 +361,29 @@ def test_onboarding_rules_are_hard_rules() -> None:
     assert len(fallback_plan(f)) == 2
 
 
+async def test_first_plan_uses_their_usual_week_and_days(
+    client: AsyncClient, auth: dict[str, str], session: AsyncSession
+) -> None:
+    from jogga.planner import plan_out, sync_plan
+
+    profile = {
+        "days": [0, 2, 5],
+        "runs_per_week": 3,
+        "experience": "regular",
+        "usual_week_km": 15,
+        "consent": True,
+    }
+    assert (await client.put("/me/profile", json=profile, headers=auth)).status_code == 200
+    user_id = await session.scalar(select(User.id))
+    monday = datetime(2026, 10, 26, 7, tzinfo=UTC)
+    out = plan_out(
+        await sync_plan(session, user_id, "Europe/London", force=True, now=monday), monday
+    )
+    assert out is not None
+    assert [s["weekday"] for s in out["sessions"]] == ["Mon", "Wed", "Sat"]
+    assert {s["km"] for s in out["sessions"]} == {5.0}
+
+
 async def test_profile_round_trips_and_shapes_the_plan(
     client: AsyncClient, auth: dict[str, str]
 ) -> None:
@@ -373,13 +396,17 @@ async def test_profile_round_trips_and_shapes_the_plan(
         "usual_week_km": 15,
         "dislikes": ["track"],
         "niggles": "  Left knee  ",
+        "blocker": "time",
+        "heard_from": "event",
         "consent": True,
     }
     assert (await client.put("/me/profile", json=body, headers=auth)).status_code == 200
     got = (await client.get("/me/profile", headers=auth)).json()
     assert got["onboarded"] and got["days"] == [1, 5] and got["niggles"] == "Left knee"
-    bad = await client.put("/me/profile", json={"experience": "pro"}, headers=auth)
-    assert bad.status_code == 422
+    assert got["blocker"] == "time" and got["heard_from"] == "event"
+    for wrong in ({"experience": "pro"}, {"blocker": "rain"}):
+        bad = await client.put("/me/profile", json=wrong, headers=auth)
+        assert bad.status_code == 422
     await client.post("/runs", json=run_payload(run_id=uuid.uuid4()), headers=auth)
     plan = (await client.get("/plan/current", headers=auth)).json()["plan"]
     planned = [s for s in plan["sessions"] if s["status"] == "planned"]

@@ -78,3 +78,7 @@ Respond with only the JSON object defined by the response schema.
 - `profile.goal` and `profile.race_date` say what they are training for. Mention the race
   date when it is close.
 - `profile.niggles` are old injuries. Keep the plan gentle on them and never diagnose.
+- `profile.blocker` is what usually stops them running. `time`: keep sessions short and
+  easy to fit in. `motivation`: make every run feel achievable and mention progress.
+  `injury`: build gently and keep rest days between runs. `unsure`: say plainly what each
+  run is for.

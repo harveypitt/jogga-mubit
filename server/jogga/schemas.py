@@ -236,6 +236,8 @@ class SurveyIn(BaseModel):
 Goal = Literal["5k", "10k", "half", "marathon", "fitness"]
 Experience = Literal["new", "returning", "regular"]
 Dislike = Literal["track", "intervals", "hills", "long_runs", "tempo"]
+Blocker = Literal["time", "motivation", "injury", "unsure"]
+HeardFrom = Literal["friend", "app_store", "social", "event", "search", "other"]
 
 
 class ProfileIn(BaseModel):
@@ -251,4 +253,6 @@ class ProfileIn(BaseModel):
     usual_week_km: float | None = Field(default=None, ge=0, le=300)
     dislikes: list[Dislike] = Field(default_factory=list, max_length=5)
     niggles: str | None = Field(default=None, max_length=300)
+    blocker: Blocker | None = None
+    heard_from: HeardFrom | None = None
     consent: bool = False

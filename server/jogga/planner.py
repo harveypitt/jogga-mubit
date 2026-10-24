@@ -226,6 +226,10 @@ def facts(
             beginner = False
         if not before and profile.usual_week_km:
             avg4w = float(profile.usual_week_km)
+        if not last10 and profile.usual_week_km:
+            # No runs yet: size each run from the usual week they told us about.
+            typical_km = round(float(profile.usual_week_km) / rpw, 1)
+            long4w = max(long4w, typical_km)
     wk = []
     for i in range(8):
         monday = ws - timedelta(weeks=7 - i)
@@ -324,6 +328,7 @@ def _profile_packet(p: RunnerProfile | None) -> dict[str, Any] | None:
         "experience": p.experience,
         "dislikes": p.dislikes or None,
         "niggles": p.niggles,
+        "blocker": p.blocker,
     }
 
 
@@ -450,7 +455,9 @@ def fallback_plan(
     """Rules-only plan: the usual runs, spread out with rest days, mostly easy."""
     days = f.days_left
     n = min(f.runs_per_week - len(f.done), cap_sessions(f, budget_count))
-    n = min(n, (len(days) + 1) // 2)
+    back_to_back = any((b - a).days == 1 for a, b in zip(days, days[1:], strict=False))
+    # Rest days between runs, unless the days they can run already have gaps.
+    n = min(n, (len(days) + 1) // 2 if back_to_back else len(days))
     km_left = min(f.week_cap, budget_km) if budget_km is not None else f.week_cap
     while n > 0 and km_left / n < f.min_km - KM_SLACK:
         n -= 1
