@@ -1,5 +1,6 @@
 """Unit tests for the Strava replay parser and grader."""
 
+import asyncio
 import csv
 import gzip
 import json
@@ -7,15 +8,22 @@ import math
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from jogga.replay import endomondo
-from jogga.replay.__main__ import _forecast_scores, _summary
+from jogga.replay.__main__ import (
+    REPLAY_METADATA,
+    _forecast_scores,
+    _summary,
+    regrade,
+    replay,
+)
 from jogga.replay.endomondo import load_runner, read_workout, select_runners, workout_run
 from jogga.replay.grade import grade
-from jogga.replay.strava import load_export, parse_gpx, route_run
+from jogga.replay.strava import ReplayRun, load_export, parse_gpx, route_run
 
 GPX_NAMESPACE = "http://www.topografix.com/GPX/1/1"
 EARTH_RADIUS_M = 6_371_000.0
@@ -595,6 +603,181 @@ def test_multi_runner_summary_reports_split_and_runner_counts() -> None:
     assert summary["by_split"]["train"]["checks"]["tone"]["rate"] == 1.0
     assert summary["by_split"]["holdout"]["checks"]["tone"]["rate"] == 0.0
     assert summary["runners"] == {"1": 1, "2": 1}
+
+
+def test_replay_persists_completed_rows_before_coach_failure(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    class FakeConnection:
+        async def run_sync(self, callback: Any) -> None:
+            pass
+
+    class FakeEngineContext:
+        async def __aenter__(self) -> FakeConnection:
+            return FakeConnection()
+
+        async def __aexit__(self, *args: Any) -> None:
+            pass
+
+    class FakeEngine:
+        def begin(self) -> FakeEngineContext:
+            return FakeEngineContext()
+
+        async def dispose(self) -> None:
+            pass
+
+    class FakeSession:
+        def add(self, row: Any) -> None:
+            pass
+
+        async def flush(self) -> None:
+            pass
+
+        async def commit(self) -> None:
+            pass
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, *args: Any) -> None:
+            pass
+
+    runs = [
+        ReplayRun(
+            external_id=f"run-{i}",
+            started_at=START + timedelta(days=i),
+            distance_m=5000.0,
+            moving_s=1600.0,
+            elapsed_s=1630.0,
+            gain_m=10.0,
+            loss_m=8.0,
+        )
+        for i in range(3)
+    ]
+    output = tmp_path / "partial"
+    output.mkdir()
+    notes_path = output / "notes.jsonl"
+    notes_path.write_text("stale row\n", encoding="utf-8")
+
+    async def fake_ensure_db(_url: str) -> None:
+        pass
+
+    monkeypatch.setattr(
+        "jogga.replay.__main__._ensure_db",
+        fake_ensure_db,
+    )
+    monkeypatch.setattr(
+        "jogga.replay.__main__.create_async_engine",
+        lambda *_args, **_kwargs: FakeEngine(),
+    )
+    monkeypatch.setattr(
+        "jogga.replay.__main__.async_sessionmaker",
+        lambda *_args, **_kwargs: lambda: FakeSession(),
+    )
+    monkeypatch.setattr(
+        "jogga.replay.__main__.load_export",
+        lambda _path: (runs, {"activities": 3, "runs": 3}),
+    )
+
+    async def fake_build_packet(_db: Any, _run: Any) -> str:
+        return json.dumps(_packet())
+
+    calls = 0
+
+    async def failing_coach(_db: Any, _run: Any, *, llm_client: Any) -> SimpleNamespace:
+        nonlocal calls
+        calls += 1
+        if calls > 2:
+            raise RuntimeError("stub coach failure")
+        return SimpleNamespace(
+            payload=_note(),
+            source="heuristic",
+            model=None,
+            latency_ms=None,
+            cost_usd=None,
+            error=None,
+        )
+
+    monkeypatch.setattr("jogga.replay.__main__.build_packet", fake_build_packet)
+    monkeypatch.setattr("jogga.replay.__main__.coach_run", failing_coach)
+    args = SimpleNamespace(
+        endomondo=None,
+        export=tmp_path,
+        limit=0,
+        coach="heuristic",
+        holdout_coach="mubit-norecord",
+        db="unused",
+        out=output,
+        concurrency=1,
+        target=[],
+    )
+
+    with pytest.raises(RuntimeError, match="stub coach failure"):
+        asyncio.run(replay(args))
+
+    rows = [json.loads(line) for line in notes_path.read_text(encoding="utf-8").splitlines()]
+    assert [row["i"] for row in rows] == [0, 1]
+
+
+def test_regrade_sorts_partial_rows_and_allows_missing_trailing_rows(tmp_path: Path) -> None:
+    output = tmp_path / "partial"
+    output.mkdir()
+
+    def row(
+        runner: int, i: int, km: float, pace_s: float, forecast: dict[str, Any]
+    ) -> dict[str, Any]:
+        note = _note()
+        note["forecast"] = forecast
+        return {
+            "runner": runner,
+            "split": "train" if runner == 1 else "holdout",
+            "i": i,
+            "km": km,
+            "pace_s": pace_s,
+            "source": "heuristic",
+            "model": None,
+            "latency_ms": None,
+            "cost_usd": None,
+            "error": None,
+            "note": note,
+            "packet": _packet(),
+        }
+
+    rows = [
+        row(2, 0, 10.0, 600, {"km": 12.0, "pace": 540}),
+        row(1, 1, 5.0, 300, {"km": 6.0, "pace": 270}),
+        row(1, 0, 4.0, 360, {"km": 4.5, "pace": 330}),
+    ]
+    (output / "notes.jsonl").write_text(
+        "".join(json.dumps(saved) + "\n" for saved in rows), encoding="utf-8"
+    )
+    (output / REPLAY_METADATA).write_text(
+        json.dumps(
+            {
+                "export": {"runners": 2, "workouts": 5},
+                "coach": "mubit",
+                "model": "test-model",
+                "multi_runner": True,
+                "holdout_coach": "mubit-norecord",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    regrade(output)
+
+    saved = [
+        json.loads(line)
+        for line in (output / "notes.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+    assert [(entry["runner"], entry["i"]) for entry in saved] == [(1, 0), (1, 1), (2, 0)]
+    assert summary["notes"] == 3
+    assert summary["forecast"]["n"] == 1
+    assert summary["forecast"]["mae"]["coach"] == {"km": 0.5, "pace_s": 30.0}
+    assert summary["by_split"]["train"]["notes"] == 2
+    assert summary["by_split"]["holdout"]["notes"] == 1
+    assert not (output / REPLAY_METADATA).exists()
 
 
 def test_tone_rules_flag_gap_acronym_but_not_the_word_gap() -> None:

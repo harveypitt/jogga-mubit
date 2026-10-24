@@ -29,6 +29,7 @@ from .grade import grade
 from .strava import ReplayRun, load_export
 
 DEFAULT_DB = "postgresql+asyncpg://localhost:5432/jogga_replay"
+REPLAY_METADATA = ".replay-metadata.json"
 
 
 def _client(coach: str) -> LLMClient | None:
@@ -77,27 +78,49 @@ async def _ensure_db(url: str) -> None:
 
 def regrade(out: Path) -> None:
     """Re-grade saved notes without calling the coach again."""
-    rows = [json.loads(line) for line in (out / "notes.jsonl").read_text().splitlines()]
-    previous = json.loads((out / "summary.json").read_text())
+    notes_path = out / "notes.jsonl"
+    rows = [json.loads(line) for line in notes_path.read_text(encoding="utf-8").splitlines()]
+    metadata_path = out / REPLAY_METADATA
+    if metadata_path.exists():
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    else:
+        previous = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+        metadata = {
+            "export": previous["export"],
+            "coach": previous["coach"],
+            "model": previous["model"],
+            "multi_runner": "by_split" in previous or any("runner" in row for row in rows),
+            "holdout_coach": previous.get("holdout_coach"),
+        }
+    if metadata["multi_runner"]:
+        rows.sort(key=lambda row: (row["runner"], row["i"]))
+    else:
+        rows.sort(key=lambda row: row["i"])
     for row in rows:
         row["checks"] = grade(json.dumps(row["packet"]), row["note"], row["source"])
-    with (out / "notes.jsonl").open("w") as f:
+    with notes_path.open("w", encoding="utf-8") as f:
         for row in rows:
             f.write(json.dumps(row) + "\n")
-    multi_runner = "by_split" in previous or any("runner" in row for row in rows)
     summary = _summary(
         rows,
-        previous["export"],
-        previous["coach"],
-        multi_runner=multi_runner,
-        holdout_coach=previous.get("holdout_coach"),
+        metadata["export"],
+        metadata["coach"],
+        multi_runner=metadata["multi_runner"],
+        holdout_coach=metadata.get("holdout_coach"),
     )
-    summary["model"] = previous["model"]
-    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    summary["model"] = metadata["model"]
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    metadata_path.unlink(missing_ok=True)
     print(json.dumps(summary["checks"], indent=2))
 
 
 async def replay(args: argparse.Namespace) -> None:
+    args.out.mkdir(parents=True, exist_ok=True)
+    notes_path = args.out / "notes.jsonl"
+    notes_path.write_text("", encoding="utf-8")
+    metadata_path = args.out / REPLAY_METADATA
+    metadata_path.unlink(missing_ok=True)
+
     multi_runner = args.endomondo is not None
     if multi_runner:
         selection = json.loads(args.endomondo.read_text(encoding="utf-8"))
@@ -135,6 +158,16 @@ async def replay(args: argparse.Namespace) -> None:
         runner_specs = [{"user": None, "split": None, "runs": runs, "coach": args.coach}]
         runner_specs[0]["client"] = _client(args.coach)
 
+    model_used = args.coach != "heuristic" or (multi_runner and args.holdout_coach != "heuristic")
+    metadata = {
+        "export": counts,
+        "coach": args.coach,
+        "model": config.LLM_MODEL if model_used else None,
+        "multi_runner": multi_runner,
+        "holdout_coach": args.holdout_coach if multi_runner else None,
+    }
+    metadata_path.write_text(json.dumps(metadata) + "\n", encoding="utf-8")
+
     await _ensure_db(args.db)
     engine = create_async_engine(args.db)
     async with engine.begin() as conn:
@@ -142,9 +175,8 @@ async def replay(args: argparse.Namespace) -> None:
         await conn.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
-    args.out.mkdir(parents=True, exist_ok=True)
-
     semaphore = asyncio.Semaphore(args.concurrency if multi_runner else 1)
+    notes_lock = asyncio.Lock()
 
     async def replay_runner(spec: dict[str, Any]) -> list[dict[str, Any]]:
         async with semaphore:
@@ -201,6 +233,10 @@ async def replay(args: argparse.Namespace) -> None:
                     if multi_runner:
                         row["runner"] = spec["user"]
                         row["split"] = spec["split"]
+                    async with notes_lock:
+                        with notes_path.open("a", encoding="utf-8") as notes_file:
+                            notes_file.write(json.dumps(row) + "\n")
+                            notes_file.flush()
                     rows_for_runner.append(row)
                     failed = [k for k, v in checks.items() if v is False]
                     if multi_runner:
@@ -220,13 +256,22 @@ async def replay(args: argparse.Namespace) -> None:
                         )
                 return rows_for_runner
 
-    rows_by_runner = await asyncio.gather(*(replay_runner(spec) for spec in runner_specs))
-    rows = [row for runner_rows in rows_by_runner for row in runner_rows]
-    await engine.dispose()
+    runner_tasks = [asyncio.create_task(replay_runner(spec)) for spec in runner_specs]
+    try:
+        rows_by_runner = await asyncio.gather(*runner_tasks)
+    except BaseException:
+        for task in runner_tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*runner_tasks, return_exceptions=True)
+        raise
+    finally:
+        await engine.dispose()
 
+    rows = [row for runner_rows in rows_by_runner for row in runner_rows]
     if multi_runner:
         rows.sort(key=lambda row: (row["runner"], row["i"]))
-    with (args.out / "notes.jsonl").open("w") as f:
+    with notes_path.open("w", encoding="utf-8") as f:
         for row in rows:
             f.write(json.dumps(row) + "\n")
     summary = _summary(
@@ -237,6 +282,7 @@ async def replay(args: argparse.Namespace) -> None:
         holdout_coach=args.holdout_coach if multi_runner else None,
     )
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    metadata_path.unlink(missing_ok=True)
     print(json.dumps(summary, indent=2))
 
 
