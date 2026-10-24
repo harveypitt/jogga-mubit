@@ -21,7 +21,13 @@ from jogga.replay.__main__ import (
     regrade,
     replay,
 )
-from jogga.replay.endomondo import load_runner, read_workout, select_runners, workout_run
+from jogga.replay.endomondo import (
+    build_index,
+    load_runner,
+    read_workout,
+    select_runners,
+    workout_run,
+)
 from jogga.replay.grade import grade
 from jogga.replay.strava import ReplayRun, load_export, parse_gpx, route_run
 
@@ -474,6 +480,27 @@ def test_read_workout_round_trips_dict_literal_offsets(tmp_path: Path) -> None:
     offset = len((repr(first) + "\n").encode("utf-8"))
 
     assert read_workout(data_path, offset, len(second_line)) == second
+
+
+def test_build_index_writes_run_offsets(tmp_path: Path) -> None:
+    workouts = [
+        {"sport": "run", "userId": 11, "id": 101, "timestamp": [1700000001]},
+        {"sport": "bike", "userId": 11, "id": 102, "timestamp": [1700000002]},
+        {"sport": "run", "userId": 22, "id": 103, "timestamp": [1700000003]},
+    ]
+    data_path = tmp_path / "endomondo.json"
+    index_path = tmp_path / "index.jsonl"
+    lines = [repr(workout).encode("utf-8") + b"\n" for workout in workouts]
+    data_path.write_bytes(b"".join(lines))
+
+    assert build_index(data_path, index_path) == 2
+
+    entries = [json.loads(line) for line in index_path.read_text(encoding="utf-8").splitlines()]
+    assert [entry["id"] for entry in entries] == [101, 103]
+    assert [read_workout(data_path, entry["off"], entry["len"]) for entry in entries] == [
+        workouts[0],
+        workouts[2],
+    ]
 
 
 def test_select_runners_is_deterministic_and_applies_selection_rules(

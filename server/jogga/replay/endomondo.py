@@ -1,9 +1,10 @@
-"""Selection and parsing helpers for Endomondo workout exports."""
+"""Endomondo pipeline: build index → select runners → replay."""
 
 import argparse
 import ast
 import json
 import random
+import re
 import statistics
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -20,6 +21,46 @@ MIN_VALID_WORKOUTS = 30
 MAX_WORKOUTS_PER_RUNNER = 40
 QUALIFYING_RUNNERS = 20
 HOLDOUT_RUNNERS = 4
+_SPORT_RE = re.compile(r"'sport': '([^']*)'")
+_USER_RE = re.compile(r"'userId': (\d+)")
+_ID_RE = re.compile(r"'id': (\d+)")
+_TIMESTAMP_RE = re.compile(r"'timestamp': \[(\d+)")
+
+
+def build_index(data_path: Path, index_path: Path) -> int:
+    """Write byte offsets for run workouts and return the number indexed."""
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    count = 0
+    offset = 0
+    with data_path.open("rb") as data_file, index_path.open("w", encoding="utf-8") as index_file:
+        for raw_line in data_file:
+            line = raw_line.decode("utf-8", "replace")
+            sport = _SPORT_RE.search(line)
+            user = _USER_RE.search(line)
+            workout_id = _ID_RE.search(line)
+            timestamp = _TIMESTAMP_RE.search(line)
+            if (
+                sport is not None
+                and sport.group(1) == "run"
+                and user is not None
+                and workout_id is not None
+                and timestamp is not None
+            ):
+                index_file.write(
+                    json.dumps(
+                        {
+                            "u": int(user.group(1)),
+                            "id": int(workout_id.group(1)),
+                            "t": int(timestamp.group(1)),
+                            "off": offset,
+                            "len": len(raw_line),
+                        }
+                    )
+                    + "\n"
+                )
+                count += 1
+            offset += len(raw_line)
+    return count
 
 
 def workout_run(d: dict[str, Any]) -> ReplayRun | None:
@@ -118,8 +159,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m jogga.replay.endomondo")
     parser.add_argument("--data", type=Path, required=True, help="Endomondo dict-literal data file")
     parser.add_argument("--index", type=Path, required=True, help="Endomondo run index")
-    parser.add_argument("--out", type=Path, required=True, help="selection JSON output")
+    parser.add_argument("--out", type=Path, help="selection JSON output")
+    parser.add_argument("--build-index", action="store_true", help="build a run index")
     args = parser.parse_args()
+
+    if args.build_index:
+        print(f"indexed={build_index(args.data, args.index)}")
+        return
+    if args.out is None:
+        parser.error("--out is required unless --build-index")
 
     selection, diagnostics = _build_selection(args.data, args.index)
     args.out.parent.mkdir(parents=True, exist_ok=True)
