@@ -15,6 +15,7 @@ fallback) returns feedback plus a next-run suggestion.
 ios/      SwiftUI app (XcodeGen project.yml, generated Jogga.xcodeproj committed)
 server/   Python 3.12, FastAPI, SQLAlchemy 2 (async), Alembic, Postgres
 docs/     SPEC.md — the authoritative v0 spec
+          MUBIT_ENDOMONDO.md — Mubit adapter training data and evaluation
 ```
 
 ## Server
