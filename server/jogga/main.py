@@ -24,6 +24,7 @@ from .auth import (
 from .coach import coach_run
 from .db import get_session
 from .models import CoachNote, ReportCard, Run, Session, Target, User
+from .planner import newest_import, plan_out, sync_plan
 from .posthog import get_posthog_client, initialize_posthog
 from .report_card import grade_weeks
 from .schemas import (
@@ -220,7 +221,21 @@ async def post_run(body: RunIn, user: Authed, db: DB) -> dict[str, object]:
     note = await coach_run(db, run)
     await db.commit()
     await _refresh_report_card(db, user.id, run.tz)
-    return {"run": _run_out(run), "coach": _note_out(note)}
+    plan = await _refresh_plan(db, user.id, run.tz)
+    return {"run": _run_out(run), "coach": _note_out(note), "plan": plan}
+
+
+async def _refresh_plan(db: AsyncSession, user_id: uuid.UUID, tz: str | None) -> object:
+    """Tick the run off this week's plan. No LLM; a failure never fails the upload."""
+    try:
+        row = await sync_plan(db, user_id, tz, allow_llm=False)
+        out = plan_out(row)
+        await db.commit()
+        return out
+    except Exception:
+        await db.rollback()
+        logger.exception("week plan refresh failed user=%s", user_id)
+        return None
 
 
 async def _refresh_report_card(db: AsyncSession, user_id: uuid.UUID, tz: str | None) -> None:
@@ -356,6 +371,28 @@ async def report_card_history(
             for start, w in sorted(graded.items(), reverse=True)
         ]
     }
+
+
+@app.get("/plan/current")
+async def plan_current(user: Authed, db: DB, tz: TZ = None) -> dict[str, object]:
+    """This week's plan: written on the week's first read, replanned once a day after a miss."""
+    row = await sync_plan(db, user.id, tz)
+    out = plan_out(row)
+    await db.commit()
+    return {"plan": out}
+
+
+@app.post("/plan/regenerate")
+async def plan_regenerate(user: Authed, db: DB, tz: TZ = None) -> dict[str, object]:
+    """Rewrite this week's plan after a history import. At most one LLM call per import."""
+    row = await sync_plan(db, user.id, tz, allow_llm=False)
+    newest = await newest_import(db, user.id)
+    stale = row is not None and newest is not None and newest > row.updated_at
+    if row is None or stale:
+        row = await sync_plan(db, user.id, tz, force=stale)
+    out = plan_out(row)
+    await db.commit()
+    return {"plan": out}
 
 
 @app.delete("/runs")

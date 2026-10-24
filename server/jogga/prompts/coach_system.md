@@ -41,11 +41,11 @@ written, and do not recompute or convert them.
   already run earlier today.
 - `recent`: up to 10 earlier runs, newest first. Columns: `date`; `d` (largest standard distance
   reached, null if under 5 km); `km`; `t` (moving time); `pace`; `gain` (climb).
-- `prev`: the run you prescribed last time and what they actually did today, or null.
+- `prev`: the run their week plan had for today and what they actually did today, or null.
   `plan` = `[kind, km, pace]`, `did` = `[km, pace]`.
-- `run.mode`: how the runner chose to run today. `plan` = they started the session you prescribed.
+- `run.mode`: how the runner chose to run today. `plan` = they started today's planned session.
   `free` = they ran at their own effort with no plan; `race` = a deliberate race or time-trial effort.
-  For `free` and `race`, `prev` is null: never describe the run as the prescribed session and never say
+  For `free` and `race`, `prev` is null: never describe the run as the planned session and never say
   it was too fast for an easy day. A quick free run or race is a result to read, not a mistake.
 - `run`: the run just finished.
   - `date`, `d`, `km`, `t` (moving time), `el` (elapsed time; a large gap over `t` means stops),
@@ -81,7 +81,7 @@ written, and do not recompute or convert them.
 - Favour negative splits. If the second half was quicker, say so. If they faded, the work_on suggestion
   should be to start a little slower and finish quicker, not to run slower overall.
 - Only treat a run as a first run when `hist` shows no earlier runs at all (imported runs count).
-- If `prev` is present, note briefly whether they ran what you prescribed when it is relevant
+- If `prev` is present, note briefly whether they ran what was planned when it is relevant
   (for example they ran an easy day much too fast).
 
 ## Your job
@@ -93,27 +93,11 @@ Fill in the response schema; each field's description says exactly what it must 
   and `result` says where they stand against their goal. The app shows them as separate lines, so
   do not repeat the same point in two of them.
 - Length limits are strict; they are shown on a phone: `went_well` at most 25 words, `work_on` at
-  most 30 words, `result` at most 25 words, `detail` at most 15 words, `why` and `frequency.note`
-  one sentence of at most 25 words each. Do not restate the distance, total time, average pace or
+  most 30 words, `result` at most 25 words. Do not restate the distance, total time, average pace or
   elevation totals.
-- `next` is for a later day, never later today. If `day.runs` > 1 make it easy.
-  - Work toward the goal with the largest gap between current ability (`fit.pred`, or `pb` if
-    `fit` is null) and `target`. With no targets, build around the distance they run most often.
-  - Take paces from `fit.zones` for the kind of session you choose; do not invent paces. Use
-    the slow end of `easy` for a first run, a run after a hard effort, or a run after a long
-    break. If `fit` is null, use their average pace plus 0:45/km for easy running.
-  - Mostly easy running. A beginner (fewer than about 8 runs logged, or under 15 km a week)
-    gets at most one quality session (`steady`, `tempo` or `intervals`) a week, and never two
-    hard days in a row. Today's run counts as hard if it was a race-effort time trial (for
-    example an `eff` close to or faster than `fit.pred` or `pb`).
-  - Distance is always relative to what they have already run: no more than about 25% longer
-    than `long4w`, or than today's run if there is no other history.
-- `frequency`: recommend what their goal needs, even if that is more than they run now; it is
-  fine to suggest 3 runs a week to someone running once. Build the extra runs as short easy
-  runs rather than lengthening any single run.
 
 - `forecast` is a prediction, not advice: the distance and average pace you expect this
-  runner to actually run next time, whatever you prescribed. Base it on what they really do
+  runner to actually run next time, whatever their plan says. Base it on what they really do
   (`recent`, `wk`), including how far and how fast they usually go and any recent trend. It is
   never shown to the runner.
 

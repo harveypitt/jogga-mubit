@@ -129,8 +129,6 @@ class LLMCoachOutput(BaseModel):
     went_well: str
     work_on: str
     result: str
-    next: LLMNext
-    frequency: Frequency
     forecast: LLMForecast
 
 
@@ -139,8 +137,9 @@ class CoachOutput(BaseModel):
 
     feedback: str
     pacing: Pacing
-    next: NextRun
-    frequency: Frequency
+    # Only the rules-based coach still suggests a next run; the week plan does that now.
+    next: NextRun | None = None
+    frequency: Frequency | None = None
     went_well: str | None = None
     work_on: str | None = None
     result: str | None = None

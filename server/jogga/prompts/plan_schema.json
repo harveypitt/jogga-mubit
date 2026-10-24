@@ -1,0 +1,36 @@
+{
+  "name": "jogga_week_plan",
+  "strict": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "note": {
+        "type": "string",
+        "description": "One sentence of at most 25 words: the idea of this week's plan and how it moves them toward their goal."
+      },
+      "change": {
+        "type": "string",
+        "description": "Only when `why` is \"missed\": one sentence of at most 20 words saying what moved or was dropped and why. Otherwise an empty string."
+      },
+      "sessions": {
+        "type": "array",
+        "description": "The runs still to do this week, one per day at most, only on dates in `days_left`. Never repeat runs already in `done`.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "date": {"type": "string", "description": "YYYY-MM-DD, one of `days_left`."},
+            "kind": {"type": "string", "enum": ["easy", "steady", "tempo", "intervals", "long"]},
+            "km": {"type": "number", "description": "Distance in km, at most `cap.run_km`."},
+            "pace": {"type": "string", "description": "Target pace m:ss per km, from `fit.zones` for this kind."},
+            "detail": {"type": "string", "description": "At most 15 words: how to run it."},
+            "why": {"type": "string", "description": "At most 25 words: why this run, on this day."}
+          },
+          "required": ["date", "kind", "km", "pace", "detail", "why"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["note", "change", "sessions"],
+    "additionalProperties": false
+  }
+}

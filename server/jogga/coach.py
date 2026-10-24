@@ -394,11 +394,6 @@ def parse_coach_output(text: str, pacing: Pacing) -> CoachOutput:
     if start < 0 or end <= start:
         raise ValueError("no JSON object in response")
     llm = LLMCoachOutput.model_validate(json.loads(text[start : end + 1]))
-    pace = parse_pace(llm.next.pace)
-    if not 120 <= pace <= 1200:
-        raise ValueError(f"pace {pace} s/km out of range")
-    if not 0 < llm.next.km <= 50:
-        raise ValueError(f"km {llm.next.km} out of range")
     forecast_pace = parse_pace(llm.forecast.pace)
     if not 120 <= forecast_pace <= 1200:
         raise ValueError(f"forecast pace {forecast_pace} s/km out of range")
@@ -410,17 +405,6 @@ def parse_coach_output(text: str, pacing: Pacing) -> CoachOutput:
     return CoachOutput(
         feedback=f"{went_well.strip()} {work_on.strip()} {result.strip()}".strip(),
         pacing=pacing,
-        next=NextRun(
-            km=llm.next.km,
-            pace=pace,
-            kind=llm.next.kind,
-            detail=_clean_text(llm.next.detail),
-            why=_clean_text(llm.next.why),
-        ),
-        frequency=Frequency(
-            runs_per_week=max(1, min(7, llm.frequency.runs_per_week)),
-            note=_clean_text(llm.frequency.note),
-        ),
         went_well=went_well,
         work_on=work_on,
         result=result,

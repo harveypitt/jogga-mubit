@@ -4,7 +4,7 @@ import asyncio
 import json
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, get_args
 
 import httpx
 import pytest
@@ -28,14 +28,6 @@ VALID_OUTPUT = {
     "went_well": "Splits held within 4 s/km on flat.",
     "work_on": "The first kilometre was too hot for the rest.",
     "result": "The 5K effort was 30 s off your best.",
-    "next": {
-        "kind": "easy",
-        "km": 4.0,
-        "pace": "5:40",
-        "detail": "Easy 4 km at 5:40/km.",
-        "why": "Base.",
-    },
-    "frequency": {"runs_per_week": 3, "note": "Three a week."},
     "forecast": {"km": 4.0, "pace": "6:00"},
 }
 
@@ -246,7 +238,7 @@ def test_parse_coach_output_llm() -> None:
     assert out.went_well == "Splits held within 4 s/km on flat."
     assert out.work_on == "The first kilometre was too hot for the rest."
     assert out.result == "The 5K effort was 30 s off your best."
-    assert out.next.pace == 340 and out.next.kind == "easy"
+    assert out.next is None and out.frequency is None
     assert out.pacing == "positive"  # server-decided, passed in
     assert out.forecast == Forecast(km=4.0, pace=360)
 
@@ -267,46 +259,31 @@ def test_parse_em_dash_normalised() -> None:
     assert "—" not in parsed.feedback
 
 
-def test_parse_en_dash_range_kept() -> None:
-    out = {
-        **VALID_OUTPUT,
-        "next": {**VALID_OUTPUT["next"], "detail": "4 km easy at 7:24–8:01/km."},
-    }
-    parsed = parse_coach_output(json.dumps(out), "even")
-    assert parsed.next.detail == "4 km easy at 7:24–8:01/km."
+def test_parse_forecast_pace_with_units() -> None:
+    out = {**VALID_OUTPUT, "forecast": {"km": 4.0, "pace": "8:01"}}
+    fc = parse_coach_output(json.dumps(out), "even").forecast
+    assert fc is not None and fc.pace == 481
+    out["forecast"]["pace"] = "7:24/km"  # type: ignore[index]
+    fc = parse_coach_output(json.dumps(out), "even").forecast
+    assert fc is not None and fc.pace == 444
 
 
-def test_parse_pace_with_units() -> None:
-    out = {**VALID_OUTPUT, "next": {**VALID_OUTPUT["next"], "pace": "8:01"}}
-    assert parse_coach_output(json.dumps(out), "even").next.pace == 481
-    out["next"]["pace"] = "7:24/km"
-    assert parse_coach_output(json.dumps(out), "even").next.pace == 444
-
-
-def test_parse_pace_bad_values() -> None:
+def test_parse_forecast_bad_values() -> None:
     for bad in ("fast", "481", "7:61", "1:30"):  # 1:30 under the 120 s floor
-        out = {**VALID_OUTPUT, "next": {**VALID_OUTPUT["next"], "pace": bad}}
+        out = {**VALID_OUTPUT, "forecast": {"km": 4.0, "pace": bad}}
         try:
             parse_coach_output(json.dumps(out), "even")
         except ValueError:
             pass
         else:
             raise AssertionError(f"pace {bad!r} should fail")
-
-
-def test_parse_km_zero() -> None:
-    out = {**VALID_OUTPUT, "next": {**VALID_OUTPUT["next"], "km": 0}}
+    out = {**VALID_OUTPUT, "forecast": {"km": 0, "pace": "6:00"}}
     try:
         parse_coach_output(json.dumps(out), "even")
     except ValueError:
         pass
     else:
         raise AssertionError("km 0 should fail")
-
-
-def test_parse_frequency_clamped() -> None:
-    out = {**VALID_OUTPUT, "frequency": {"runs_per_week": 12, "note": "n"}}
-    assert parse_coach_output(json.dumps(out), "even").frequency.runs_per_week == 7
 
 
 def test_parse_old_format_rejected() -> None:
@@ -329,8 +306,7 @@ def test_parse_observation_shape_rejected() -> None:
     out = {
         "observation": "o",
         "result": "r",
-        "next": VALID_OUTPUT["next"],
-        "frequency": VALID_OUTPUT["frequency"],
+        "forecast": VALID_OUTPUT["forecast"],
     }
     try:
         parse_coach_output(json.dumps(out), "even")
@@ -341,9 +317,8 @@ def test_parse_observation_shape_rejected() -> None:
 
 
 def test_schema_matches_llm_models() -> None:
-    from typing import get_args
-
-    from jogga.schemas import Frequency, LLMCoachOutput, LLMNext, RunKind
+    from jogga.planner import LLMPlan, LLMSession, PlanKind, load_plan_schema
+    from jogga.schemas import LLMCoachOutput, LLMForecast
 
     schema = load_response_schema()["schema"]
 
@@ -353,9 +328,12 @@ def test_schema_matches_llm_models() -> None:
         assert node["additionalProperties"] is False
 
     check(LLMCoachOutput, schema)
-    check(LLMNext, schema["properties"]["next"])
-    check(Frequency, schema["properties"]["frequency"])
-    assert schema["properties"]["next"]["properties"]["kind"]["enum"] == list(get_args(RunKind))
+    check(LLMForecast, schema["properties"]["forecast"])
+    plan = load_plan_schema()["schema"]
+    check(LLMPlan, plan)
+    check(LLMSession, plan["properties"]["sessions"]["items"])
+    kinds = plan["properties"]["sessions"]["items"]["properties"]["kind"]["enum"]
+    assert kinds == list(get_args(PlanKind))
 
 
 async def test_result_without_usage() -> None:

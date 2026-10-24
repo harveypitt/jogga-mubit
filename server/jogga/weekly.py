@@ -6,6 +6,7 @@ import logging
 import re
 import time
 from datetime import UTC, date, datetime, timedelta
+from datetime import time as dtime
 from functools import lru_cache
 from importlib import resources
 from typing import Any
@@ -16,11 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import config
 from .coach import LLMClient, LLMResult, OpenRouterClient
-from .models import CoachNote, ReportCard, Run, Target
+from .models import CoachNote, ReportCard, Run, Target, WeekPlan
 from .posthog import get_posthog_client
 from .report_card import CATEGORIES, Context, Week, grade_weeks
 from .schemas import ReportSummary
 from .weeks import local_week, valid_tz, week_end
+from .weeks import zone as zone_of
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +164,17 @@ async def load_context(
         rpw = ((payload or {}).get("frequency") or {}).get("runs_per_week")
         if isinstance(rpw, int) and rpw > 0:
             plans.append((at, rpw))
+    # A week plan sets that week's planned runs (as it stood on Monday, never a cut-down replan).
+    for week_start, plan_tz, count in (
+        await db.execute(
+            select(WeekPlan.week_start, WeekPlan.tz, WeekPlan.original_count).where(
+                WeekPlan.user_id == user_id
+            )
+        )
+    ).all():
+        starts = datetime.combine(week_start, dtime(), zone_of(plan_tz))
+        plans.append((starts - timedelta(microseconds=1), count))
+    plans.sort(key=lambda p: p[0])
     targets = dict(
         (
             await db.execute(
@@ -193,13 +206,14 @@ def _capture(
     latency_ms: int,
     result: LLMResult | None,
     error: str | None,
+    span: str = "report_card_summary",
 ) -> None:
     client = get_posthog_client()
     if client is None:
         return
     props: dict[str, Any] = {
-        "$ai_trace_id": f"report:{user_id}:{week.isoformat()}",
-        "$ai_span_name": "report_card_summary",
+        "$ai_trace_id": f"{span}:{user_id}:{week.isoformat()}",
+        "$ai_span_name": span,
         "$ai_model": config.LLM_MODEL,
         "$ai_provider": "openrouter",
         "$ai_latency": latency_ms / 1000,

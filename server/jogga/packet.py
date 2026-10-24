@@ -212,6 +212,19 @@ async def build_packet(db: AsyncSession, run: Run) -> str:
     # What we prescribed last time vs what they did today.
     prev = None
     if run.mode in (None, "plan"):
+        from .planner import planned_for
+
+        planned = await planned_for(db, run)
+        if planned is not None:
+            prev = {
+                "plan": [planned["kind"], planned["km"], fmt_dur(int(planned["pace"]))],
+                "did": [
+                    round(run.distance_m / 1000.0, 2),
+                    fmt_dur(_pace_s_per_km(run.distance_m, run.moving_s)),
+                ],
+            }
+    # Notes from before week plans carried the next run themselves.
+    if prev is None and run.mode in (None, "plan"):
         prev_rows = (
             await db.scalars(
                 select(CoachNote)

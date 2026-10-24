@@ -16,67 +16,6 @@
         "type": "string",
         "description": "One sentence of at most 25 words comparing today's standard-distance effort with the target and previous best, quoting `eff` times and differences exactly as written (e.g. 30:51, 3:51 off your 27:00 target). On a first run (`hist.runs` 0) call it a baseline. If there is no target and no previous best, describe what today sets as their benchmark."
       },
-      "next": {
-        "type": "object",
-        "description": "The single next run that best moves them toward their goal, for a later day.",
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "easy",
-              "steady",
-              "tempo",
-              "intervals",
-              "long",
-              "race"
-            ],
-            "description": "Session type. Mostly easy; follow the session rules in the system prompt."
-          },
-          "km": {
-            "type": "number",
-            "description": "Distance in km, relative to what they have actually run: no more than about 25% longer than `long4w` (or than today's run if that is all there is)."
-          },
-          "pace": {
-            "type": "string",
-            "description": "A single pace as \"m:ss\" (never a range), copied from `fit.zones` for this kind of session: for an easy run after a first or hard run use the slow end of `easy`. Just the time, no units."
-          },
-          "detail": {
-            "type": "string",
-            "description": "One sentence of at most 15 words stating the session including its pace(s), e.g. \"5 km easy at 7:45–8:01/km\" or \"1 km warm-up, 4 x 4 min at 5:59/km with 2 min jog, 1 km cool-down\"."
-          },
-          "why": {
-            "type": "string",
-            "description": "One sentence of at most 25 words linking this session to their goal or to what today's run showed."
-          }
-        },
-        "required": [
-          "kind",
-          "km",
-          "pace",
-          "detail",
-          "why"
-        ],
-        "additionalProperties": false
-      },
-      "frequency": {
-        "type": "object",
-        "description": "How often to run to reach their goal.",
-        "properties": {
-          "runs_per_week": {
-            "type": "integer",
-            "description": "Runs per week their goal needs, between 1 and 6. 3 is a sensible default for a 5k or 10k goal."
-          },
-          "note": {
-            "type": "string",
-            "description": "One sentence of at most 25 words on how to build up to that frequency from what they do now (`wk`, `n4w`). If it is more than they run now, the added runs should be short and easy rather than making any run longer. If `streak` is 3 or more you may acknowledge the consistency."
-          }
-        },
-        "required": [
-          "runs_per_week",
-          "note"
-        ],
-        "additionalProperties": false
-      },
       "forecast": {
         "type": "object",
         "description": "Your prediction of what this runner will actually do on their next run, judged from their own history (`recent`, `wk`, `hist.rest_d`), not from what you prescribed in `next`. It is scored against the run they really log next.",
@@ -101,8 +40,6 @@
       "went_well",
       "work_on",
       "result",
-      "next",
-      "frequency",
       "forecast"
     ],
     "additionalProperties": false

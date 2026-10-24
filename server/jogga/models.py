@@ -3,7 +3,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Integer, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -130,3 +130,33 @@ class ReportCard(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class WeekPlan(Base):
+    """This week's planned sessions: written by the planner LLM, checked by the server."""
+
+    __tablename__ = "week_plans"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    week_start: Mapped[date] = mapped_column(Date, primary_key=True)
+    tz: Mapped[str] = mapped_column(Text)
+    # [{id, date, kind, km, pace, detail, why, status, run_id, moved_from}], by date.
+    sessions: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
+    # Sessions in the week's first plan; Consistency grades against this, never a cut-down replan.
+    original_count: Mapped[int] = mapped_column(Integer)
+    note: Mapped[str | None] = mapped_column(Text)
+    change: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(Text)
+    model: Mapped[str | None] = mapped_column(Text)
+    packet: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    # Earlier versions of ``sessions`` with why they were replaced.
+    history: Mapped[list[dict[str, object]]] = mapped_column(JSONB, server_default="[]")
+    needs_replan: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    replanned_on: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

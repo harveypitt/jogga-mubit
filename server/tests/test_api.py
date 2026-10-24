@@ -19,14 +19,6 @@ VALID_COACH_OUTPUT = {
     "went_well": "Splits stayed steady.",
     "work_on": "Start the next run more gently.",
     "result": "A solid effort.",
-    "next": {
-        "kind": "easy",
-        "km": 4.0,
-        "pace": "5:40",
-        "detail": "Easy 4 km at 5:40/km.",
-        "why": "Build your base.",
-    },
-    "frequency": {"runs_per_week": 3, "note": "Three runs per week."},
     "forecast": {"km": 4.0, "pace": "6:00"},
 }
 
@@ -257,13 +249,22 @@ def test_parse_coach_output_garbage() -> None:
 
 def test_parse_coach_output_wrapped() -> None:
     out = parse_coach_output(
-        'sure! {"went_well":"w","work_on":"x","result":"r",'
-        '"next":{"kind":"easy","km":5.0,"pace":"5:20","detail":"d","why":"w"},'
-        '"frequency":{"runs_per_week":3,"note":"n"},'
-        '"forecast":{"km":4.0,"pace":"6:00"}}',
+        'sure! {"went_well":"w","work_on":"x","result":"r",' '"forecast":{"km":4.0,"pace":"5:20"}}',
         "even",
     )
-    assert out.pacing == "even" and out.next.pace == 320
+    assert out.pacing == "even" and out.forecast is not None and out.forecast.pace == 320
+    assert out.next is None and out.frequency is None
+
+
+def test_parse_coach_output_rejects_a_next_run() -> None:
+    # The week plan prescribes runs now; the coach only reviews.
+    with pytest.raises(ValidationError):
+        parse_coach_output(
+            '{"went_well":"w","work_on":"x","result":"r",'
+            '"next":{"kind":"easy","km":5.0,"pace":"5:20","detail":"d","why":"w"},'
+            '"forecast":{"km":4.0,"pace":"6:00"}}',
+            "even",
+        )
 
 
 def test_parse_coach_output_old_shape_rejected() -> None:
