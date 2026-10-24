@@ -145,6 +145,11 @@ day, which the history can't predict. We don't claim forecasting skill.
 
 ### What Mubit did with it
 
+These results come from the combined coach (feedback plus next run plus
+frequency in one call) that existed before commit `cbca0e5` split next-run
+planning into its own planner call. Live coach calls now use a different
+schema, so Mubit files them under a separate task.
+
 Mubit grouped the Sol calls into a new task ("Jogga's running coach 3", 641
 calls, all `openai/gpt-6.1-sol`). It kept 34 of them as examples, since Mubit
 chooses which recorded calls to keep, and started training adapter v1 on
