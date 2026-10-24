@@ -81,7 +81,8 @@ def test_valid_plan_passes() -> None:
         (plan_json((1, "tempo", 5, "5:20"), (2, "intervals", 4, "5:00")), {}, "back to back"),
         (plan_json((1, "tempo", 5, "5:20")), {"hard_dates": {WEEK}}, "back to back"),
         (plan_json((0, "easy", 11, "6:50")), {}, "cap"),
-        (plan_json(*((d, "easy", 6, "6:50") for d in (0, 2, 4, 6))), {}, "left for the week"),
+        (plan_json(*((d, "easy", 7, "6:50") for d in (0, 2, 4, 6))), {}, "left for the week"),
+        (plan_json((0, "easy", 1.7, "6:50")), {}, "minimum"),
         (plan_json((0, "easy", 5, "5:30")), {}, "zone"),
         (plan_json((0, "easy", 5, "6:50")), {"days_left": [WEEK + timedelta(days=1)]}, "day"),
         (plan_json((0, "easy", 5, "6:50"), note="Easy week — rest well."), {}, "em dash"),
@@ -144,6 +145,8 @@ class FakePlanner:
         self.calls.append(packet)
         cap = packet["cap"]
         days = [d for d, _ in packet["days_left"]][::2][: min(cap["sessions"], 3)]
+        while days and cap["week_km"] / len(days) < cap["min_km"]:
+            days.pop()
         km = round(min(cap["run_km"], cap["week_km"] / max(len(days), 1)), 1)
         pace = packet["fit"]["zones"]["easy"][1] if packet["fit"] else "7:00"
         body = {
@@ -300,3 +303,29 @@ async def test_survey_is_validated_and_private_to_the_runner(
         headers={"Authorization": f"Bearer {other}"},
     )
     assert resp.status_code == 404
+
+
+def test_no_run_too_short_to_be_worth_doing() -> None:
+    # Harvey's week: 6.3 km done, a cap that only left 3.7 km, split into 2.0 + 1.7 km.
+    f = mk_facts(
+        today=WEEK + timedelta(days=5),
+        days_left=[WEEK + timedelta(days=5), WEEK + timedelta(days=6)],
+        done=[
+            {
+                "date": WEEK + timedelta(days=2),
+                "km": 6.3,
+                "pace": 356,
+                "hard": False,
+                "run_id": "r1",
+            }
+        ],
+        long4w=6.3,
+        avg4w_km=8.0,
+        typical_km=5.5,
+    )
+    assert f.min_km == 3.3
+    # A low-volume week may still add one usual run on top of its average.
+    assert f.week_cap == round(8.0 + 5.5 - 6.3, 1)
+    sessions = fallback_plan(f)
+    assert sessions and all(s["km"] >= f.min_km for s in sessions)
+    assert len(sessions) == 1

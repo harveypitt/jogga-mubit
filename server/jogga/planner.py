@@ -40,6 +40,9 @@ WEEK_GROWTH = 1.10
 # Longest run and week allowed when there is no recent history to scale from.
 MIN_RUN_CAP_KM = 5.0
 MIN_WEEK_CAP_KM = 10.0
+# Shortest run worth planning: 3 km, or 60% of their usual run if that is longer.
+MIN_SESSION_KM = 3.0
+MIN_SESSION_SHARE = 0.6
 PACE_TOLERANCE_S = 15
 NO_FIT_EASY_EXTRA_S = 45
 KM_SLACK = 0.05
@@ -108,8 +111,14 @@ class Facts:
     @property
     def week_cap(self) -> float:
         """km left for the rest of the week."""
-        total = max(WEEK_GROWTH * self.avg4w_km, MIN_WEEK_CAP_KM)
+        # 10% growth, but a low-volume runner may always add one usual run.
+        total = max(WEEK_GROWTH * self.avg4w_km, self.avg4w_km + self.typical_km, MIN_WEEK_CAP_KM)
         return round(max(0.0, total - self.done_km), 1)
+
+    @property
+    def min_km(self) -> float:
+        floor = max(MIN_SESSION_KM, MIN_SESSION_SHARE * self.typical_km)
+        return round(min(self.run_cap, floor), 1)
 
     @property
     def hard_cap(self) -> int:
@@ -284,6 +293,8 @@ def check_plan(
         seen.add(day)
         if not 0 < s.km <= f.run_cap + KM_SLACK:
             raise ValueError(f"{s.km} km is over the {f.run_cap} km cap")
+        if s.km < f.min_km - KM_SLACK:
+            raise ValueError(f"{s.km} km is under the {f.min_km} km minimum")
         pace = parse_pace(s.pace)
         _check_pace(s.kind, pace, f)
         detail, why = s.detail.strip(), s.why.strip()
@@ -328,12 +339,12 @@ def fallback_plan(
         n = min(n, budget_count)
     n = min(n, (len(days) + 1) // 2)
     km_left = min(f.week_cap, budget_km) if budget_km is not None else f.week_cap
-    while n > 0 and km_left / n < 1.0:
+    while n > 0 and km_left / n < f.min_km - KM_SLACK:
         n -= 1
     if n <= 0:
         return []
     idx = [0] if n == 1 else [round(i * (len(days) - 1) / (n - 1)) for i in range(n)]
-    km = round(min(f.typical_km, f.run_cap, km_left / n), 1)
+    km = round(min(max(f.typical_km, f.min_km), f.run_cap, km_left / n), 1)
     if f.zones is not None:
         easy = int(f.zones["easy"][1])
     else:
@@ -440,6 +451,7 @@ def plan_packet(
         or None,
         "cap": {
             "run_km": f.run_cap,
+            "min_km": f.min_km,
             "week_km": round(week_km, 1),
             "sessions": cap_sessions(f, budget_count),
             "hard": f.hard_cap,

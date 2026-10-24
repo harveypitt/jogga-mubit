@@ -21,14 +21,16 @@ The packet:
 - `done`: runs already done this week: date, km, pace, and whether it was hard.
 - `plan`: on a replan, this week's sessions so far: date, kind, km, pace, status
   (done, missed or planned).
-- `cap`: `run_km` the longest any single run may be, `week_km` the most km left for the rest
+- `cap`: `run_km` the longest any single run may be, `min_km` the shortest, `week_km` the most km left for the rest
   of the week, `sessions` the most runs you may plan, `hard` how many more hard sessions you may
   plan this week.
 
 Rules (the server checks all of them):
 - Only use dates in `days_left`, at most one run a day.
-- No more than `cap.sessions` runs, no single run over `cap.run_km`, and the runs together no
-  more than `cap.week_km`.
+- No more than `cap.sessions` runs, no single run over `cap.run_km` or under `cap.min_km`, and
+  the runs together no more than `cap.week_km`. If `cap.week_km` can't fit a run of at least
+  `cap.min_km`, plan fewer runs, or none and say the rest of the week is rest. A run too short
+  to be worth doing is never the answer.
 - `steady`, `tempo` and `intervals` are hard. Never put a hard run the day after a hard run,
   including hard runs in `done`, and never plan more than `cap.hard` of them.
 - Paces come from `fit.zones` for that kind (`easy` and `long` inside the easy range). Within
