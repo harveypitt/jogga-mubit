@@ -206,6 +206,8 @@ class RunnerProfile(Base):
     # What usually stops them running; sets the planner's tone.
     blocker: Mapped[str | None] = mapped_column(Text)
     heard_from: Mapped[str | None] = mapped_column(Text)
+    # Which onboarding flow they last finished or skipped; the app re-asks older ones.
+    onboarding_version: Mapped[int] = mapped_column(Integer, server_default="1")
     consent: Mapped[bool] = mapped_column(Boolean, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

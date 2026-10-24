@@ -238,11 +238,16 @@ struct RunnerProfile: Codable, Hashable {
     var niggles: String?
     var blocker: String?
     var heardFrom: String?
+    /// Onboarding flow they last finished or skipped; older ones see the current flow again.
+    var onboardingVersion = 1
     var consent = false
+
+    static let currentOnboarding = 2
+    var needsOnboarding: Bool { !onboarded || onboardingVersion < Self.currentOnboarding }
 
     enum CodingKeys: String, CodingKey {
         case onboarded, goal, days, experience, dislikes, niggles, blocker, consent
-        case heardFrom = "heard_from"
+        case heardFrom = "heard_from", onboardingVersion = "onboarding_version"
         case raceDate = "race_date", runsPerWeek = "runs_per_week", usualWeekKm = "usual_week_km"
     }
 
@@ -261,11 +266,15 @@ struct RunnerProfile: Codable, Hashable {
         niggles = try c.decodeIfPresent(String.self, forKey: .niggles)
         blocker = try c.decodeIfPresent(String.self, forKey: .blocker)
         heardFrom = try c.decodeIfPresent(String.self, forKey: .heardFrom)
+        onboardingVersion = try c.decodeIfPresent(Int.self, forKey: .onboardingVersion) ?? 1
         consent = try c.decodeIfPresent(Bool.self, forKey: .consent) ?? false
     }
 
     var body: [String: Any] {
-        var out: [String: Any] = ["days": days, "dislikes": dislikes, "consent": consent]
+        var out: [String: Any] = [
+            "days": days, "dislikes": dislikes, "consent": consent,
+            "onboarding_version": onboardingVersion,
+        ]
         if let goal { out["goal"] = goal }
         if let raceDate { out["race_date"] = Self.day.string(from: raceDate) }
         if let runsPerWeek { out["runs_per_week"] = runsPerWeek }

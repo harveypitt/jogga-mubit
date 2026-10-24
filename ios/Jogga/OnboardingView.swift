@@ -10,6 +10,8 @@ struct OnboardingView: View {
     var previewStep: Step?
     /// Set when onboarding runs before sign-in, from the demo screen.
     var onFinish: (() -> Void)?
+    /// Opened from the demo screen, which already says what Jogga is.
+    var fromDemo = false
 
     @Environment(RunStore.self) private var store
     @Environment(AuthStore.self) private var auth
@@ -116,7 +118,7 @@ struct OnboardingView: View {
                 hasRace = initial.raceDate != nil || initial.goal == nil
                 if editing { step = .goal }
             }
-            if onFinish != nil { step = .goal }
+            if onFinish != nil || fromDemo { step = .goal }
             if let previewStep {
                 profile.goal = "half"
                 profile.experience = "regular"
@@ -1012,6 +1014,7 @@ struct OnboardingView: View {
         saving = true
         var answers = profile
         answers.consent = true
+        answers.onboardingVersion = RunnerProfile.currentOnboarding
         answers.niggles = answers.niggles?.trimmingCharacters(in: .whitespacesAndNewlines)
         Analytics.capture(skipped ? .onboardingSkipped : .onboardingCompleted, [
             "goal": .string(answers.goal ?? "none"),

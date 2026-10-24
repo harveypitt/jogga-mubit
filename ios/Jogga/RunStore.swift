@@ -47,7 +47,7 @@ final class RunStore {
     private(set) var weekPlan: WeekPlan?
     /// Onboarding answers; nil until loaded from the server.
     private(set) var profile: RunnerProfile?
-    var needsOnboarding: Bool { profile?.onboarded == false }
+    var needsOnboarding: Bool { profile?.needsOnboarding == true }
     /// Set by RootView so other first-run prompts wait their turn.
     var onboardingVisible = false
     /// Check-ins waiting for their run to reach the server, keyed by run id.

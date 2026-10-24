@@ -6,7 +6,8 @@ import SwiftUI
 /// then the week plan ticks it off. Shows what Jogga does before asking for anything.
 struct DemoIntroView: View {
     var onStart: () -> Void
-    var onSignIn: () -> Void
+    /// Nil when already signed in.
+    var onSignIn: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var startedAt = Date.now
@@ -56,9 +57,11 @@ struct DemoIntroView: View {
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(PressableStyle(scale: 0.97))
-                Button("I already have an account", action: onSignIn)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
+                if let onSignIn {
+                    Button("I already have an account", action: onSignIn)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.top, 28)
         }

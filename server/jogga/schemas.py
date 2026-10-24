@@ -255,4 +255,5 @@ class ProfileIn(BaseModel):
     niggles: str | None = Field(default=None, max_length=300)
     blocker: Blocker | None = None
     heard_from: HeardFrom | None = None
+    onboarding_version: int = Field(default=1, ge=1, le=100)
     consent: bool = False

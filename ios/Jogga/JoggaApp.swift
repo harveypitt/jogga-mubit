@@ -121,7 +121,7 @@ struct RootView: View {
                 OnboardingView(onFinish: { inOnboarding = false })
             } else if auth.signedIn {
                 MainTabView()
-                    .fullScreenCover(isPresented: $showOnboarding) { OnboardingView() }
+                    .fullScreenCover(isPresented: $showOnboarding) { OnboardingCover() }
                     .onChange(of: store.needsOnboarding, initial: true) { _, needs in
                         if needs { showOnboarding = true }
                     }
@@ -178,5 +178,18 @@ struct MainTabView: View {
     private var newReport: Bool {
         guard let last = store.reportLastWeek, last.summary != nil else { return false }
         return last.weekStart != seenReportWeek
+    }
+}
+
+/// Signed-in runners who haven't done the current onboarding: the demo, then the questions.
+private struct OnboardingCover: View {
+    @State private var started = false
+
+    var body: some View {
+        if started {
+            OnboardingView(fromDemo: true)
+        } else {
+            DemoIntroView(onStart: { withAnimation(.smooth(duration: 0.4)) { started = true } }, onSignIn: nil)
+        }
     }
 }

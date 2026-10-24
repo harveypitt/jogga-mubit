@@ -404,6 +404,11 @@ async def test_profile_round_trips_and_shapes_the_plan(
     got = (await client.get("/me/profile", headers=auth)).json()
     assert got["onboarded"] and got["days"] == [1, 5] and got["niggles"] == "Left knee"
     assert got["blocker"] == "time" and got["heard_from"] == "event"
+    # Old app builds don't send a version, so their answers count as the first flow.
+    assert got["onboarding_version"] == 1
+    v2 = await client.put("/me/profile", json={"onboarding_version": 2}, headers=auth)
+    assert v2.status_code == 200
+    assert (await client.get("/me/profile", headers=auth)).json()["onboarding_version"] == 2
     for wrong in ({"experience": "pro"}, {"blocker": "rain"}):
         bad = await client.put("/me/profile", json=wrong, headers=auth)
         assert bad.status_code == 422
