@@ -97,7 +97,7 @@ enum ProgressChartMath {
     }
 }
 
-/// Progress tab: distance picker, hero best, target gap, effort chart,
+/// Progress tab: weekly report card, distance picker, hero best, target gap, effort chart,
 /// stats row, Riegel prediction, frequency advice, edit target.
 struct ProgressTabView: View {
     @Environment(RunStore.self) private var store
@@ -220,6 +220,9 @@ struct ProgressTabView: View {
     var body: some View {
         NavigationStack {
             JoggaScreen {
+                ReportCardSection()
+                    .padding(.bottom, 6)
+
                 Picker("Distance", selection: $distance) {
                     ForEach(RunMath.standardDistances, id: \.key) { d in
                         Text(Fmt.distanceName(d.key)).tag(d.key)

@@ -86,6 +86,7 @@ struct Run: Codable, Identifiable, Hashable {
         ]
         if let externalID { body["external_id"] = externalID }
         if let mode { body["mode"] = mode }
+        body["tz"] = TimeZone.current.identifier
         return body
     }
 }

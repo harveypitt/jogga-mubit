@@ -73,8 +73,8 @@ final class APIClient {
         guard (200..<300).contains(http.statusCode) else { throw APIError(status: http.statusCode) }
     }
 
-    func get<T: Decodable>(_ path: String) async throws -> T {
-        let (data, http) = try await request("GET", path)
+    func get<T: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> T {
+        let (data, http) = try await request("GET", path, query: query)
         guard (200..<300).contains(http.statusCode) else {
             throw APIError(status: http.statusCode)
         }

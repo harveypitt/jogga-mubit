@@ -18,6 +18,10 @@ enum AnalyticsEvent: String {
     case signInFailed = "sign_in_failed"
     case signInCompleted = "sign_in_completed"
     case screenTime = "screen_time"
+    /// Grades and categories only: never km, paces or cadence.
+    case reportCardViewed = "report_card_viewed"
+    case reportCardRowOpened = "report_card_row_opened"
+    case reportFocusFollowed = "report_focus_followed"
 }
 
 enum Screen: String {

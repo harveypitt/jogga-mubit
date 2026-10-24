@@ -43,6 +43,10 @@ final class RunStore {
     private(set) var stats: [String: DistanceStats] = [:]
     private(set) var hasSyncedMe = false
     private(set) var latestCoach: CoachNote?
+    private(set) var reportThisWeek: ReportCard?
+    private(set) var reportLastWeek: ReportCard?
+    /// Newest first, including this week.
+    private(set) var reportHistory: [ReportCard] = []
     private(set) var pendingUploads: [UUID] = []
     private(set) var pendingDeletes: [UUID] = []
 
@@ -248,6 +252,7 @@ final class RunStore {
     private func uploadPending() async -> CoachNote? {
         guard api.token != nil else { return nil }
         var note: CoachNote?
+        var uploadedAny = false
         // Upload oldest first so coach alternation and history are realistic.
         let queue = pendingUploads.sorted {
             (run(id: $0)?.startedAt ?? .distantPast) < (run(id: $1)?.startedAt ?? .distantPast)
@@ -267,12 +272,14 @@ final class RunStore {
                     note = coach
                     latestCoach = coach
                 }
+                uploadedAny = true
             } catch {
                 break // offline — try again next foreground
             }
         }
         saveQueue()
         saveCoach()
+        if uploadedAny { await refreshReportCards() }
         return note
     }
 
@@ -381,6 +388,48 @@ final class RunStore {
         }
         _ = await uploadSerially()
         await syncDeletes()
+        await refreshReportCards()
+    }
+
+    /// Live card, last week's report (first read after Monday writes it) and history.
+    func refreshReportCards() async {
+        guard api.token != nil else { return }
+        struct One: Decodable { var card: ReportCard? }
+        struct Many: Decodable { var weeks: [ReportCard] }
+        let tz = [URLQueryItem(name: "tz", value: TimeZone.current.identifier)]
+        async let current: One? = try? api.get("report-card/current", query: tz)
+        async let last: One? = try? api.get("report-card/latest-closed", query: tz)
+        async let history: Many? = try? api.get(
+            "report-card/history", query: tz + [URLQueryItem(name: "weeks", value: "12")]
+        )
+        let (c, l, h) = await (current, last, history)
+        if let c { reportThisWeek = c.card }
+        if let l { reportLastWeek = l.card }
+        if let h { reportHistory = h.weeks }
+        trackFocusFollowed()
+    }
+
+    /// Once per closed week: did the runner improve the category last week's report asked for?
+    private func trackFocusFollowed() {
+        guard let last = reportLastWeek, last.summary != nil,
+              let index = reportHistory.firstIndex(where: { $0.weekStart == last.weekStart }),
+              index + 1 < reportHistory.count
+        else { return }
+        let before = reportHistory[index + 1]
+        guard let category = before.summary?.focus.category,
+              let was = before.row(category)?.grade,
+              let now = last.row(category)?.grade
+        else { return }
+        let key = "jogga.reportFocusTracked"
+        guard UserDefaults.standard.string(forKey: key) != last.weekStart else { return }
+        UserDefaults.standard.set(last.weekStart, forKey: key)
+        Analytics.capture(.reportFocusFollowed, [
+            "week": .string(last.weekStart),
+            "category": .string(category),
+            "from_grade": .string(was),
+            "to_grade": .string(now),
+            "improved": .bool(now < was),
+        ])
     }
 
     func setTarget(distance: String, seconds: Int) async {
@@ -403,6 +452,9 @@ final class RunStore {
         stats = [:]
         hasSyncedMe = false
         latestCoach = nil
+        reportThisWeek = nil
+        reportLastWeek = nil
+        reportHistory = []
         for url in [runsURL, queueURL, deletesURL, coachURL, meURL] {
             try? FileManager.default.removeItem(at: url)
         }
