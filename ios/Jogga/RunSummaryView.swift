@@ -16,6 +16,7 @@ struct RunSummaryView: View {
     @State private var showMap = false
     @State private var showDiscardConfirm = false
     @State private var showDeleteConfirm = false
+    @State private var showSurvey = false
 
     private var segments: [RoutePace.Segment] { RoutePace.segments(run.route) }
 
@@ -70,7 +71,17 @@ struct RunSummaryView: View {
                     }
             }
         }
-        .task { await loadCoach() }
+        .task {
+            if isNew, !RunSurvey.isDone(run.id) { showSurvey = true }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-surveyPreview") { showSurvey = true }
+            #endif
+            await loadCoach()
+            await store.flushSurveys()
+        }
+        .sheet(isPresented: $showSurvey) {
+            RunSurveyView(run: run, coachReady: !coachLoading)
+        }
         .trackScreen(isNew ? .runSummary : .runDetail)
     }
 

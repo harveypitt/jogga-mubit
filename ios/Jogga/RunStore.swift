@@ -45,6 +45,13 @@ final class RunStore {
     private(set) var latestCoach: CoachNote?
     private(set) var reportThisWeek: ReportCard?
     private(set) var weekPlan: WeekPlan?
+    /// Check-ins waiting for their run to reach the server, keyed by run id.
+    private var pendingSurveys: [String: RunSurvey] = {
+        guard let data = UserDefaults.standard.data(forKey: "jogga.pendingSurveys") else {
+            return [:]
+        }
+        return (try? JSONDecoder().decode([String: RunSurvey].self, from: data)) ?? [:]
+    }()
     /// The plan's next run still to do (today's if there is one).
     var nextSession: WeekPlan.Session? { weekPlan?.next }
     private(set) var reportLastWeek: ReportCard?
@@ -333,6 +340,32 @@ final class RunStore {
         return ImportOutcome(added: added, duplicates: imported.count - added)
     }
 
+    /// Save a post-run check-in; it waits in a queue until its run has uploaded.
+    func submitSurvey(_ survey: RunSurvey, for runID: UUID) async {
+        pendingSurveys[runID.uuidString.lowercased()] = survey
+        savePendingSurveys()
+        await flushSurveys()
+        if survey.injury { await refreshReportCards() }
+    }
+
+    func flushSurveys() async {
+        guard api.token != nil else { return }
+        for (id, survey) in pendingSurveys {
+            do {
+                try await api.put("runs/\(id)/survey", body: survey.body)
+                pendingSurveys[id] = nil
+            } catch {
+                // Not uploaded yet or offline; retried on the next refresh.
+            }
+        }
+        savePendingSurveys()
+    }
+
+    private func savePendingSurveys() {
+        let data = try? JSONEncoder().encode(pendingSurveys)
+        UserDefaults.standard.set(data, forKey: "jogga.pendingSurveys")
+    }
+
     /// One planner call so this week's plan reflects imported history.
     @discardableResult
     func regeneratePlan() async -> WeekPlan? {
@@ -402,6 +435,7 @@ final class RunStore {
         }
         _ = await uploadSerially()
         await syncDeletes()
+        await flushSurveys()
         await refreshReportCards()
     }
 

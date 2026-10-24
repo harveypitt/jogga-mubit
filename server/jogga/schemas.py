@@ -212,3 +212,22 @@ class ReportSummary(BaseModel):
     headline: str
     summary: str
     focus: ReportFocus
+
+
+Difficulty = Literal["easy", "moderate", "hard", "max"]
+CoachingRating = Literal["spot_on", "too_much", "too_little", "off"]
+InjuryArea = Literal["foot", "calf", "knee", "hip", "back", "other"]
+InjurySeverity = Literal["niggle", "sore", "stopped"]
+
+
+class SurveyIn(BaseModel):
+    """Post-run check-in. Injuries and notes stay in Postgres, never analytics."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    difficulty: Difficulty | None = None
+    coaching: CoachingRating | None = None
+    injury: bool = False
+    injury_area: InjuryArea | None = None
+    injury_severity: InjurySeverity | None = None
+    notes: str | None = Field(default=None, max_length=500)

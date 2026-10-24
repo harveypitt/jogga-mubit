@@ -23,8 +23,8 @@ from .auth import (
 )
 from .coach import coach_run
 from .db import get_session
-from .models import CoachNote, ReportCard, Run, Session, Target, User
-from .planner import newest_import, plan_out, sync_plan
+from .models import CoachNote, ReportCard, Run, RunSurvey, Session, Target, User
+from .planner import flag_injury, newest_import, plan_out, sync_plan
 from .posthog import get_posthog_client, initialize_posthog
 from .report_card import grade_weeks
 from .schemas import (
@@ -39,6 +39,7 @@ from .schemas import (
     RunIn,
     RunOut,
     Split,
+    SurveyIn,
     TargetIn,
     UserOut,
 )
@@ -371,6 +372,29 @@ async def report_card_history(
             for start, w in sorted(graded.items(), reverse=True)
         ]
     }
+
+
+@app.put("/runs/{run_id}/survey")
+async def put_survey(run_id: uuid.UUID, body: SurveyIn, user: Authed, db: DB) -> dict[str, bool]:
+    """Post-run check-in. Reported pain replans the rest of the week on the next plan read."""
+    run = await db.scalar(select(Run).where(Run.id == run_id, Run.user_id == user.id))
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    answers = body.model_dump()
+    if not body.injury:
+        answers["injury_area"] = answers["injury_severity"] = None
+    answers["notes"] = (body.notes or "").strip() or None
+    stmt = insert(RunSurvey).values(run_id=run.id, user_id=user.id, **answers)
+    await db.execute(
+        stmt.on_conflict_do_update(
+            index_elements=[RunSurvey.run_id],
+            set_={**{k: stmt.excluded[k] for k in answers}, "updated_at": func.now()},
+        )
+    )
+    if body.injury:
+        await flag_injury(db, user.id, run)
+    await db.commit()
+    return {"ok": True}
 
 
 @app.get("/plan/current")

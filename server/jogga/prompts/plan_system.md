@@ -5,8 +5,9 @@ and replaced with a simple rules-based plan, so follow every rule below exactly.
 
 The packet:
 - `today`: [date, weekday]. `days_left`: the only dates you may use, as [date, weekday].
-- `why`: "new" (first plan of the week), "missed" (a planned run was missed, replan the rest) or
-  "regenerate" (new history was imported).
+- `why`: "new" (first plan of the week), "missed" (a planned run was missed, replan the rest),
+  "check_in" (they reported pain after a run, replan the rest) or "regenerate" (new history was
+  imported).
 - `fit`: current fitness from recent runs. `pred` predicted race times, `zones` paces per kind of
   run (`easy` is a range). Null when there is not enough recent data.
 - `goals`: per distance, `target` time, `pb` (personal best) and `n4w` efforts in the last 4 weeks.
@@ -14,6 +15,9 @@ The packet:
 - `long4w`: longest run in the last 4 weeks (km). `avg4w`: average weekly km over the 4 weeks
   before this one. `beginner`: true for fewer than 8 runs logged or under 15 km a week.
 - `report`: last week's report card grades (A best, D worst) and the category to focus on.
+- `feel`: post-run check-ins from the last two weeks: date, how hard it felt (easy, moderate,
+  hard, max), any pain as area/severity (niggle, sore, stopped) and their own notes.
+- `injury`: the worst pain reported in the last week, or null.
 - `done`: runs already done this week: date, km, pace, and whether it was hard.
 - `plan`: on a replan, this week's sessions so far: date, kind, km, pace, status
   (done, missed or planned).
@@ -39,6 +43,12 @@ How to plan:
 - Plan the number of runs their goal needs, spread out with rest days between, mostly easy.
   It is fine to plan more runs than they usually do, as short easy runs. Leave a rest day
   before a `long` run or a hard run when you can.
+- If `injury` is set, every run is easy and short, with a rest day after any run if you can;
+  for "stopped" plan at most two short easy runs. Say in `note` (or `change`) that the week
+  goes easy because of the pain, and suggest seeing a physio if it keeps hurting. Never
+  diagnose.
+- If recent runs in `feel` were "hard" or "max" when they should have been easy, slow the easy
+  pace to the slow end of the zone.
 - Use `report.focus`: Consistency means fewer, shorter, easy-to-keep runs; Load means keep the
   week near `avg4w`; Balance means more of the running easy.
 

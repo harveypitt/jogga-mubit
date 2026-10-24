@@ -27,6 +27,7 @@
 		3E778357ABD74BF3D72DE283 /* CueEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7094006EE83C51DE08B79DDE /* CueEngine.swift */; };
 		3FBA2481CBAC8FEF7F67D57C /* CueTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62A5170DB73ADF3AD341B7D4 /* CueTrack.swift */; };
 		4915F7E6BE4609064550AF64 /* AnalyticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F59B56CD43524A07296760 /* AnalyticsTests.swift */; };
+		4B10E4B3ECB92483BC0CE8D1 /* RunSurveyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EED8D4A46E199C14D92AF33 /* RunSurveyView.swift */; };
 		4C71073378AA735B05608398 /* PostHog in Frameworks */ = {isa = PBXBuildFile; productRef = F7711003799BE4468F64BA70 /* PostHog */; };
 		517F9D7976EA0A956AAC4C81 /* ActivityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DD9903B2B29377B1D4193D5 /* ActivityCard.swift */; };
 		53CB4C6760F3C571A56E69FC /* JoggaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 164499444F4F8892257C7785 /* JoggaApp.swift */; };
@@ -71,11 +72,11 @@
 		D81C673356AA0358F4BDC230 /* JoggaWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3DF466D0AD7C18F4502BFDC8 /* JoggaWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D99573C4716D046D30ED9994 /* RunActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65D2AFABF052496BCC05DA64 /* RunActivityAttributes.swift */; };
 		E01D9AD679BDB792C3975C89 /* RunStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68C441A290D6B856C2433680 /* RunStore.swift */; };
+		E2BB667CA0F64F3B56A42CEF /* ReportCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D39027A5096566B019BE8E /* ReportCardView.swift */; };
 		E4679885E12DCC876FF6B25B /* GPXParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAB24EDCE350369CC73E97F8 /* GPXParser.swift */; };
 		EFD532F51CDEBD80EF807979 /* CoachLines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 975742C0473579F27909516C /* CoachLines.swift */; };
 		F578928F5D60C965C317E1B6 /* DemoSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = E29CA70363B02C9B13CA9585 /* DemoSeed.swift */; };
 		FBA9A543C17A5A22C4DF1599 /* ProgressTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4E0C3055FFD0BBAB42D4DF /* ProgressTabView.swift */; };
-		A1C0FFEE5EC0DE0000000001 /* ReportCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0FFEE5EC0DE0000000002 /* ReportCardView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -135,12 +136,14 @@
 		28A9A3E4C75666191FAD94A3 /* JoggaTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = JoggaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		28FA035068CACB8168CCEABF /* ZipReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipReader.swift; sourceTree = "<group>"; };
 		2E049C0B238942B075CFEE4A /* PhraseBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhraseBook.swift; sourceTree = "<group>"; };
+		2EED8D4A46E199C14D92AF33 /* RunSurveyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunSurveyView.swift; sourceTree = "<group>"; };
 		30542316765693AAFA2F7E17 /* RunRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunRecorder.swift; sourceTree = "<group>"; };
 		349B249D8BD9889EE60120F4 /* RunMathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunMathTests.swift; sourceTree = "<group>"; };
 		3634DE48183C948809400FC3 /* ScreenTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTrackerTests.swift; sourceTree = "<group>"; };
 		3800701376F46241C417C6B3 /* NeuTTSStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeuTTSStream.swift; sourceTree = "<group>"; };
 		3917F2C9A1E65A71FE18617F /* RunMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunMath.swift; sourceTree = "<group>"; };
 		3DF466D0AD7C18F4502BFDC8 /* JoggaWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = JoggaWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		40D39027A5096566B019BE8E /* ReportCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportCardView.swift; sourceTree = "<group>"; };
 		487DFB09D7C499CE4B02091E /* RunSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunSummaryView.swift; sourceTree = "<group>"; };
 		499A0DB1E6E6870B5DE8A67C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4A5FA894E34585E2D510FF02 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -187,7 +190,6 @@
 		DAE70B19F9022057836704AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E29CA70363B02C9B13CA9585 /* DemoSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoSeed.swift; sourceTree = "<group>"; };
 		EC4E0C3055FFD0BBAB42D4DF /* ProgressTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressTabView.swift; sourceTree = "<group>"; };
-		A1C0FFEE5EC0DE0000000002 /* ReportCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportCardView.swift; sourceTree = "<group>"; };
 		F47AD7D9C0B2A9B6B3DB6BD7 /* CueSimulator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CueSimulator.swift; sourceTree = "<group>"; };
 		F6C0608C75AFA25EE0245C17 /* SystemVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemVoice.swift; sourceTree = "<group>"; };
 		FEC84F56E762FD07CEF6E068 /* NeuTTSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeuTTSTests.swift; sourceTree = "<group>"; };
@@ -314,7 +316,7 @@
 				164499444F4F8892257C7785 /* JoggaApp.swift */,
 				D19334F11D9B902B7A1F9679 /* Models.swift */,
 				EC4E0C3055FFD0BBAB42D4DF /* ProgressTabView.swift */,
-				A1C0FFEE5EC0DE0000000002 /* ReportCardView.swift */,
+				40D39027A5096566B019BE8E /* ReportCardView.swift */,
 				87007221923A21BE37E7E6A0 /* RoutePace.swift */,
 				C02686FC42BC2C376D268732 /* RouteViews.swift */,
 				A3EC1FBF70102757245FC3D4 /* RunLiveActivity.swift */,
@@ -322,6 +324,7 @@
 				30542316765693AAFA2F7E17 /* RunRecorder.swift */,
 				68C441A290D6B856C2433680 /* RunStore.swift */,
 				487DFB09D7C499CE4B02091E /* RunSummaryView.swift */,
+				2EED8D4A46E199C14D92AF33 /* RunSurveyView.swift */,
 				00057DBA6F5BB1489F24EF6A /* RunTabView.swift */,
 				761C0F9E1DBD4912FBA11332 /* SettingsView.swift */,
 				A6E2067E09ECD160A6E49B05 /* SignInView.swift */,
@@ -563,7 +566,7 @@
 				8FE79A78E9DEDD9928C560B6 /* NeuTTSVoice.swift in Sources */,
 				15860CEECDDB3B65A991055F /* PhraseBook.swift in Sources */,
 				FBA9A543C17A5A22C4DF1599 /* ProgressTabView.swift in Sources */,
-				A1C0FFEE5EC0DE0000000001 /* ReportCardView.swift in Sources */,
+				E2BB667CA0F64F3B56A42CEF /* ReportCardView.swift in Sources */,
 				AC7F520D5B146136E3660314 /* RoutePace.swift in Sources */,
 				D51A1D555051854DAB87038E /* RouteViews.swift in Sources */,
 				D99573C4716D046D30ED9994 /* RunActivityAttributes.swift in Sources */,
@@ -573,6 +576,7 @@
 				6773CF1C04782BB85B6CC478 /* RunRecorder.swift in Sources */,
 				E01D9AD679BDB792C3975C89 /* RunStore.swift in Sources */,
 				BCC0AEF5965D4A7D540C9789 /* RunSummaryView.swift in Sources */,
+				4B10E4B3ECB92483BC0CE8D1 /* RunSurveyView.swift in Sources */,
 				CC5F5C89A743B6444C1B8BCA /* RunTabView.swift in Sources */,
 				7B58A773AB7BCE860C473BAE /* SettingsView.swift in Sources */,
 				2D8860448C7A3C5147D5C173 /* SignInView.swift in Sources */,

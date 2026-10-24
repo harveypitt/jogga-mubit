@@ -10,7 +10,7 @@
       },
       "change": {
         "type": "string",
-        "description": "Only when `why` is \"missed\": one sentence of at most 20 words saying what moved or was dropped and why. Otherwise an empty string."
+        "description": "Only when `why` is \"missed\" or \"check_in\": one sentence of at most 20 words saying what moved or was dropped and why. Otherwise an empty string."
       },
       "sessions": {
         "type": "array",

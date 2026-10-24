@@ -11,8 +11,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jogga.coach import LLMResult
-from jogga.models import User, WeekPlan
-from jogga.planner import Facts, check_plan, facts, fallback_plan, match_runs, sync_plan
+from jogga.models import RunSurvey, User, WeekPlan
+from jogga.planner import (
+    HARD_KINDS,
+    Facts,
+    check_plan,
+    facts,
+    fallback_plan,
+    match_runs,
+    public_packet,
+    sync_plan,
+)
 from jogga.weekly import load_context
 from jogga.weeks import monday
 from tests.conftest import run_payload
@@ -239,3 +248,55 @@ async def test_first_plan_mid_week_keeps_the_weekly_count(
     assert row is not None and len(row.sessions) == 1
     # The coach asked for 3 a week; arriving on Saturday must not shrink that to 1.
     assert row.original_count == 3
+
+
+async def test_survey_is_stored_and_pain_replans_easy(
+    client: AsyncClient, auth: dict[str, str], session: AsyncSession
+) -> None:
+    uid = await _user_with_history(client, auth, session)
+    mon = datetime.combine(monday(datetime.now(UTC).date()), time(8), UTC)
+    llm = FakePlanner()
+    await sync_plan(session, uid, "UTC", llm_client=llm, now=mon)
+    await session.commit()
+
+    run_id = uuid.uuid4()
+    payload = run_payload(run_id=run_id, days_ago=0)
+    payload["started_at"] = (mon + timedelta(hours=1)).isoformat()
+    assert (await client.post("/runs", json=payload, headers=auth)).status_code == 200
+    survey = {
+        "difficulty": "hard",
+        "coaching": "too_much",
+        "injury": True,
+        "injury_area": "knee",
+        "injury_severity": "sore",
+        "notes": "  Knee tight on the hill.  ",
+    }
+    url = f"/runs/{run_id}/survey"
+    assert (await client.put(url, json=survey, headers=auth)).status_code == 200
+    stored = (await session.scalars(select(RunSurvey))).one()
+    assert stored.notes == "Knee tight on the hill." and stored.injury_area == "knee"
+
+    row = await sync_plan(session, uid, "UTC", llm_client=llm, now=mon + timedelta(hours=2))
+    packet = llm.calls[-1]
+    # Pain replans even if the plan was already replanned today.
+    assert len(llm.calls) == 2 and packet["why"] in ("check_in", "missed")
+    assert packet["injury"] == "sore" and packet["cap"]["hard"] == 0
+    assert packet["feel"][-1][1:] == ["hard", "knee/sore", "Knee tight on the hill."]
+    assert row is not None and all(s["kind"] not in HARD_KINDS for s in row.sessions)
+    assert "feel" not in public_packet(json.dumps(packet))
+
+
+async def test_survey_is_validated_and_private_to_the_runner(
+    client: AsyncClient, auth: dict[str, str]
+) -> None:
+    run_id = uuid.uuid4()
+    await client.post("/runs", json=run_payload(run_id=run_id), headers=auth)
+    bad = await client.put(f"/runs/{run_id}/survey", json={"difficulty": "meh"}, headers=auth)
+    assert bad.status_code == 422
+    other = (await client.post("/auth/dev", json={"name": "Other"})).json()["token"]
+    resp = await client.put(
+        f"/runs/{run_id}/survey",
+        json={"difficulty": "easy"},
+        headers={"Authorization": f"Bearer {other}"},
+    )
+    assert resp.status_code == 404

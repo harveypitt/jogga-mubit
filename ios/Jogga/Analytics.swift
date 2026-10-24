@@ -22,6 +22,9 @@ enum AnalyticsEvent: String {
     case reportCardViewed = "report_card_viewed"
     case reportCardRowOpened = "report_card_row_opened"
     case reportFocusFollowed = "report_focus_followed"
+    /// Multiple-choice answers and yes/no flags only: never injury details or notes.
+    case runSurveySubmitted = "run_survey_submitted"
+    case runSurveySkipped = "run_survey_skipped"
 }
 
 enum Screen: String {
@@ -32,6 +35,7 @@ enum Screen: String {
     case runDetail = "run_detail"
     case routeMap = "route_map", activeRun = "active_run", settings
     case stravaImport = "strava_import", target, license
+    case runSurvey = "run_survey"
 }
 
 enum AnalyticsValue {

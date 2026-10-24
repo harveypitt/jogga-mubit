@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import config
 from .coach import LLMClient, LLMResult, OpenRouterClient
 from .fitness import fitness, fmt_dur, parse_pace, split_pace
-from .models import CoachNote, ReportCard, Run, Target, WeekPlan
+from .models import CoachNote, ReportCard, Run, RunSurvey, Target, WeekPlan
 from .packet import _format_fit, fit_source
 from .weeks import local_date, local_week, valid_tz
 
@@ -46,6 +46,13 @@ KM_SLACK = 0.05
 WORD_LIMITS = {"note": 25, "change": 20, "detail": 15, "why": 25}
 DEFAULT_RUNS_PER_WEEK = 3
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+# A reported injury cuts the longest run allowed, and any injury rules out hard sessions.
+INJURY_RUN_CAP = {"niggle": 1.0, "sore": 0.75, "stopped": 0.5}
+INJURY_SEVERITY = ("niggle", "sore", "stopped")
+FEEL_DAYS = 14
+INJURY_DAYS = 7
+# Packet keys the LLM sees but analytics never does (health data and free text).
+PRIVATE_KEYS = ("feel", "injury")
 
 
 class LLMSession(BaseModel):
@@ -85,10 +92,14 @@ class Facts:
     typical_pace: int
     fit: dict[str, Any] | None = None
     wk: list[list[Any]] = field(default_factory=list)
+    # Worst injury reported in the last week ("niggle", "sore" or "stopped").
+    injury: str | None = None
+    feel: list[list[Any]] = field(default_factory=list)
 
     @property
     def run_cap(self) -> float:
-        return round(max(LONG_GROWTH * self.long4w, MIN_RUN_CAP_KM), 1)
+        cap = max(LONG_GROWTH * self.long4w, MIN_RUN_CAP_KM)
+        return round(cap * INJURY_RUN_CAP.get(self.injury or "", 1.0), 1)
 
     @property
     def done_km(self) -> float:
@@ -102,6 +113,8 @@ class Facts:
 
     @property
     def hard_cap(self) -> int:
+        if self.injury is not None:
+            return 0
         done_hard = sum(1 for d in self.done if d["hard"])
         return max(0, (1 if self.beginner else 2) - done_hard)
 
@@ -115,7 +128,12 @@ def _is_hard(run: Run, zones: dict[str, Any] | None) -> bool:
 
 
 def facts(
-    runs: list[Run], tz: str, now: datetime, prev_count: int | None, from_day: date | None = None
+    runs: list[Run],
+    tz: str,
+    now: datetime,
+    prev_count: int | None,
+    from_day: date | None = None,
+    surveys: list[RunSurvey] | None = None,
 ) -> Facts:
     """``from_day`` is the first day a new session may go on (default today)."""
     today = local_date(now, tz)
@@ -173,7 +191,22 @@ def facts(
                 round(max((r.distance_m for r in in_wk), default=0.0) / 1000.0, 1),
             ]
         )
+    started = {r.id: r.started_at for r in runs}
+    feel: list[list[Any]] = []
+    injury: str | None = None
+    for s in sorted(surveys or [], key=lambda s: started.get(s.run_id, s.created_at)):
+        at = started.get(s.run_id, s.created_at)
+        if at < now - timedelta(days=FEEL_DAYS) or at > now:
+            continue
+        hurt = f"{s.injury_area or 'other'}/{s.injury_severity or 'niggle'}" if s.injury else None
+        feel.append([local_date(at, tz).isoformat(), s.difficulty, hurt, s.notes])
+        if s.injury and at >= now - timedelta(days=INJURY_DAYS):
+            sev = s.injury_severity or "niggle"
+            if injury is None or INJURY_SEVERITY.index(sev) > INJURY_SEVERITY.index(injury):
+                injury = sev
     return Facts(
+        injury=injury,
+        feel=feel,
         today=today,
         week_start=ws,
         days_left=days_left,
@@ -395,6 +428,8 @@ def plan_packet(
         "avg4w": f.avg4w_km,
         "beginner": f.beginner,
         "report": report,
+        "feel": f.feel or None,
+        "injury": f.injury,
         "done": [
             [d["date"].isoformat(), d["km"], fmt_dur(d["pace"]), "hard" if d["hard"] else "easy"]
             for d in f.done
@@ -463,6 +498,23 @@ async def _report(db: AsyncSession, user_id: Any, week_start: date) -> dict[str,
 # --- LLM ---------------------------------------------------------------------
 
 
+def public_packet(packet: str) -> str:
+    """The packet without health data or free text, for analytics traces."""
+    body = json.loads(packet)
+    for key in PRIVATE_KEYS:
+        body.pop(key, None)
+    return json.dumps(body, separators=(",", ":"), ensure_ascii=False)
+
+
+async def flag_injury(db: AsyncSession, user_id: Any, run: Run) -> None:
+    """A reported injury replans the rest of this week on the next read, even if it
+    was already replanned today."""
+    row = await db.get(WeekPlan, (user_id, local_week(run.started_at, run.tz or "UTC")))
+    if row is not None:
+        row.needs_replan = True
+        row.replanned_on = None
+
+
 def load_plan_prompt() -> str:
     return resources.files("jogga").joinpath("prompts/plan_system.md").read_text(encoding="utf-8")
 
@@ -514,7 +566,7 @@ async def _write_plan(
                 user_id,
                 f.week_start,
                 system,
-                packet,
+                public_packet(packet),
                 int((time.monotonic() - started) * 1000),
                 result,
                 error if result is None else None,
@@ -525,7 +577,7 @@ async def _write_plan(
                 user_id,
                 f.week_start,
                 system,
-                packet,
+                public_packet(packet),
                 int((time.monotonic() - started) * 1000),
                 result,
                 None,
@@ -578,7 +630,17 @@ async def sync_plan(
         .limit(1)
     )
     prev_count = prev.original_count if prev else await _coach_runs_per_week(db, user_id)
-    f = facts(runs, zone, now, prev_count)
+    surveys = list(
+        (
+            await db.scalars(
+                select(RunSurvey).where(
+                    RunSurvey.user_id == user_id,
+                    RunSurvey.created_at >= now - timedelta(days=FEEL_DAYS + 7),
+                )
+            )
+        ).all()
+    )
+    f = facts(runs, zone, now, prev_count, surveys=surveys)
     if row is not None:
         match_runs(row, f)
     if row is None:
@@ -586,7 +648,7 @@ async def sync_plan(
     elif force:
         why = "regenerate"
     elif row.needs_replan and row.replanned_on != f.today:
-        why = "missed"
+        why = "missed" if any(s["status"] == "missed" for s in row.sessions) else "check_in"
     else:
         return row
     if not allow_llm:
@@ -599,7 +661,7 @@ async def sync_plan(
         keep = [s for s in old if s["status"] in ("done", "missed")]
     budget_km: float | None = None
     budget_count: int | None = None
-    if why == "missed":
+    if why in ("missed", "check_in"):
         left = [s for s in old if s["status"] in ("planned", "missed")]
         budget_km = round(sum(float(s["km"]) for s in left), 1)
         budget_count = len(left)
@@ -639,7 +701,9 @@ async def sync_plan(
         row.replanned_on = f.today
         row.needs_replan = False
     row.note = note if note is not None else row.note
-    row.change = change if why == "missed" else None
+    row.change = change if why in ("missed", "check_in") else None
+    if why == "check_in" and change is None:
+        row.change = "Eased off the rest of the week after your check-in."
     if why == "missed" and change is None:
         dropped = (budget_count or 0) - len(sessions)
         row.change = (
