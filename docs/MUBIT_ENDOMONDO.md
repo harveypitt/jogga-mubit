@@ -18,8 +18,10 @@ history in the packet, not from a separate model per user.
 
 - A strong teacher (GPT-6.1 Sol) passed every coaching rule on 160 notes for
   4 runners Mubit never saw. That is the target a small model has to copy.
-- A small hosted model (GPT-6 Luna) also passed every rule in the bake-off,
-  at about $0.001 a note, roughly 8x cheaper than DeepSeek.
+- A small hosted model (GPT-6 Luna) passed every numeric coaching rule on
+  the same 160 held-out notes, and kept the word limits on 157 of them. The
+  whole 798-note replay cost $0.89, about $0.001 a note and roughly 9x
+  cheaper than Sol or DeepSeek.
 - Jogga's server checks and this grader catch bad answers and fall back to a
   rule-based coach. A small model doesn't need to be perfect to be safe.
 - The first Mubit Qwen3-4B adapters, trained on about 50 examples from one
@@ -77,6 +79,9 @@ JOGGA_LLM_TIMEOUT_S=90 JOGGA_LLM_TOTAL_TIMEOUT_S=200 JOGGA_LLM_ATTEMPTS=3 \
 MUBIT_API_KEY=... \
 python -m jogga.replay --endomondo selection.json --data endomondoHR_proper.json \
   --coach mubit --holdout-coach mubit-norecord --out replay_out/endo-sol
+# Same replay with the other teachers, each with its own --db and --out:
+#   JOGGA_LLM_MODEL=openai/gpt-6-luna JOGGA_LLM_TEMPERATURE=off ...
+#   JOGGA_LLM_MODEL=deepseek/deepseek-v4.1-flash ...   (default temperature)
 # Re-score saved notes without new calls
 python -m jogga.replay --regrade --out replay_out/endo-sol
 ```
@@ -154,8 +159,11 @@ was the only model that kept every rule and limit.
 | `length_limits` | 637/637 | 160/160 |
 | `tone_rules` | 637/637 | 160/160 |
 
-The one failure was a 1:57 /km pace that the app's own validator rejected, so
-that note fell back to the built-in coach. Cost was $7.81 ($6.32 for the 638
+The one failure comes from the data, not the model. Runner 1818822's history
+has a 28 km run logged at 2:43 /km, which gives an impossible 7:31 5K effort
+and easy zones of 1:48–1:57 /km. The model stuck to those zones, the app's
+validator rejected the 1:57 /km pace, and the note fell back to the built-in
+coach. The same note failed the same way with every teacher. Cost was $7.81 ($6.32 for the 638
 recorded training calls) and the median call took 17 s.
 
 **Forecast**, mean absolute error against the next real run:
@@ -173,6 +181,71 @@ zero. The coach easily beats "repeat your last run" but only ties the median of
 the last 5. Next-run distance mostly reflects what a runner decides to do that
 day, which the history can't predict. We don't claim forecasting skill.
 
+### Same replay with GPT-6 Luna and DeepSeek V4.1 Flash
+
+To compare teachers on equal terms, we ran the full replay twice more with the
+same 20 runners, the same split and the same pre-planner coach (commit
+`dd3a4c9`), changing only `JOGGA_LLM_MODEL`. The two runs went in parallel,
+each with its own database. Mubit groups calls by model, so their training
+calls are filed apart from Sol's.
+
+**Holdout** (4 runners, 160 notes, recording off):
+
+| | GPT-6.1 Sol | GPT-6 Luna | DeepSeek V4.1 Flash |
+|---|---|---|---|
+| Real coach note | 160/160 | 160/160 | 160/160 |
+| Pace in zone, distance cap, no hard after hard, easy after double, tone | all pass | all pass | all pass |
+| `length_limits` | 160/160 | 157/160 | 151/160 |
+| Forecast error, distance / pace | 2.68 km / 30.6 s | 2.79 km / 29.9 s | 3.00 km / 30.7 s |
+
+Median of last 5 on the same 156 transitions: 2.71 km / 32.1 s.
+
+**Train** (16 runners, 638 notes, recorded):
+
+| | GPT-6.1 Sol | GPT-6 Luna | DeepSeek V4.1 Flash |
+|---|---|---|---|
+| Real coach note | 637/638 | 637/638 | 637/638 |
+| `pace_in_zone` | 637/638 | 637/638 | 634/638 |
+| Distance cap, no hard after hard, easy after double, tone | all pass | all pass | all pass |
+| `length_limits` | 637/637 | 622/637 | 610/637 |
+| Forecast error, distance / pace | 3.83 km / 32.4 s | 3.88 km / 33.8 s | 4.10 km / 33.6 s |
+
+Median of last 5 on the same 621 transitions: 3.89 km / 32.7 s.
+
+**Cost and speed** (all 798 notes):
+
+| | GPT-6.1 Sol | GPT-6 Luna | DeepSeek V4.1 Flash |
+|---|---|---|---|
+| Total cost | $7.81 | $0.89 | $8.41 |
+| Median time per note | 17 s | 20 s | 8 s |
+
+Each teacher's one fallback is the runner 1818822 note described above.
+DeepSeek's 3 other pace misses are all for one runner (74718). There it chose
+a slower easy pace than the zones, saying in its note that the zones came
+from a 42.7 km outlier.
+
+Paired bootstrap, same settings as Sol (median-of-5 error minus coach error,
+positive favours the coach):
+
+| Teacher | Split | Distance | Pace |
+|---|---|---|---|
+| GPT-6 Luna | Train | 0.01 km (−0.15 to 0.18) | −1.1 s (−3.0 to 0.7) |
+| GPT-6 Luna | Holdout | −0.08 km (−0.33 to 0.17) | 2.3 s (0.1 to 4.4) |
+| DeepSeek V4.1 Flash | Train | −0.21 km (−0.41 to −0.02) | −1.0 s (−2.6 to 0.7) |
+| DeepSeek V4.1 Flash | Holdout | −0.29 km (−0.59 to 0.01) | 1.4 s (−0.6 to 3.6) |
+
+Luna's holdout pace is the only one of the twelve intervals across the three
+teachers that favours a coach. It only just clears zero, and Luna leans the
+other way on train pace, so we don't count it as forecasting skill. DeepSeek
+forecasts distance worse than the median of the last 5 on train, and probably
+on holdout too.
+
+**Reading it:** all three teachers keep every numeric rule on runners Mubit
+never saw. Sol is the cleanest, with no word-limit misses. Luna is nearly as
+clean for about a ninth of the cost, but it is the slowest. DeepSeek is the
+fastest, but it breaks the word limits most often and forecasts worst. For
+this repetitive, schema-bound task, the much cheaper model gives up very little.
+
 ### What Mubit did with it
 
 These results come from the combined coach (feedback plus next run plus
@@ -186,6 +259,7 @@ batches. It kept 34 from one batch, and adapter v1 on Qwen3-4B started
 training straight after that. A later batch added 117 kept examples and 20
 rejected ones, for 151 kept in total. Those later examples should go into
 later versions. We'll add v1's test results here once Mubit has scored it.
+We haven't yet checked how Mubit filed or reviewed the Luna and DeepSeek calls.
 
 ### Earlier attempt: one runner, DeepSeek teacher
 
@@ -199,7 +273,8 @@ little, which is why we moved to 20 runners and 638 training calls.
 ## What this does and doesn't show
 
 - The replay checks the teacher, and it holds up: on 160 notes for runners
-  Mubit never recorded, it passed every rule.
+  Mubit never recorded, Sol, Luna and DeepSeek all passed every numeric rule.
+  Only Sol also kept every word limit.
 - Mubit scores the adapter by how closely it matches the teacher, not by
   coaching quality. Judge an adapter by running its answers through
   `jogga/replay/grade.py` as well.
