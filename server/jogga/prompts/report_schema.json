@@ -1,0 +1,25 @@
+{
+  "name": "jogga_report_card",
+  "strict": true,
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["headline", "summary", "focus"],
+    "properties": {
+      "headline": {"type": "string"},
+      "summary": {"type": "string"},
+      "focus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "action"],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["consistency", "pacing", "balance", "load", "progress"]
+          },
+          "action": {"type": "string"}
+        }
+      }
+    }
+  }
+}

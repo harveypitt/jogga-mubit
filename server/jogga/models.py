@@ -1,9 +1,9 @@
 """SQLAlchemy models for the Jogga schema."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, Text, func
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Integer, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -74,6 +74,8 @@ class Run(Base):
     # "jogga" for runs recorded in the app; "strava" for imported history.
     source: Mapped[str] = mapped_column(Text, server_default="jogga")
     mode: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # IANA zone of the device that uploaded the run; weeks are bucketed in it.
+    tz: Mapped[str | None] = mapped_column(Text, nullable=True)
     external_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -101,3 +103,30 @@ class CoachNote(Base):
     generation_id: Mapped[str | None] = mapped_column(Text)
     error: Mapped[str | None] = mapped_column(Text)
     packet: Mapped[str | None] = mapped_column(Text)
+
+
+class ReportCard(Base):
+    """Weekly report card: server-computed grades plus, once closed, an LLM summary."""
+
+    __tablename__ = "report_cards"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    week_start: Mapped[date] = mapped_column(Date, primary_key=True)
+    tz: Mapped[str] = mapped_column(Text)
+    # "live" while the week is running, "closed" once it has ended.
+    status: Mapped[str] = mapped_column(Text)
+    grades: Mapped[dict[str, object]] = mapped_column(JSONB)
+    summary: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    model: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str | None] = mapped_column(Text)
+    # Internal only (experiments, Mubit evals); never shown to the runner.
+    composite: Mapped[float | None] = mapped_column(Float)
+    packet: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

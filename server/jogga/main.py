@@ -4,16 +4,16 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Annotated, Literal, cast
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import config
+from . import config, weekly
 from .auth import (
     create_session,
     current_user,
@@ -23,8 +23,9 @@ from .auth import (
 )
 from .coach import coach_run
 from .db import get_session
-from .models import CoachNote, Run, Session, Target, User
+from .models import CoachNote, ReportCard, Run, Session, Target, User
 from .posthog import get_posthog_client, initialize_posthog
+from .report_card import grade_weeks
 from .schemas import (
     STANDARD_DISTANCES,
     AuthIn,
@@ -41,6 +42,8 @@ from .schemas import (
     UserOut,
 )
 from .stats import distance_stats
+from .weekly import backfill, card_out, close_last_week, load_context, refresh_live
+from .weeks import local_week, valid_tz
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -192,6 +195,7 @@ async def post_run(body: RunIn, user: Authed, db: DB) -> dict[str, object]:
         "splits": [s.model_dump() for s in body.splits],
         "efforts": body.efforts,
         "mode": body.mode,
+        "tz": valid_tz(body.tz),
     }
     update = {k: v for k, v in values.items() if k not in ("id", "user_id")}
     stmt = insert(Run).values(**values)
@@ -215,7 +219,18 @@ async def post_run(body: RunIn, user: Authed, db: DB) -> dict[str, object]:
             return {"run": _run_out(run), "coach": _note_out(existing)}
     note = await coach_run(db, run)
     await db.commit()
+    await _refresh_report_card(db, user.id, run.tz)
     return {"run": _run_out(run), "coach": _note_out(note)}
+
+
+async def _refresh_report_card(db: AsyncSession, user_id: uuid.UUID, tz: str | None) -> None:
+    """Best effort: a report-card failure must never fail a run upload."""
+    try:
+        await refresh_live(db, user_id, tz)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        logger.exception("report card refresh failed user=%s", user_id)
 
 
 @app.post("/runs/import")
@@ -276,12 +291,71 @@ async def import_runs(body: RunImportIn, user: Authed, db: DB) -> RunImportOut:
                 efforts=r.efforts,
                 source=body.source,
                 external_id=r.external_id,
+                tz=valid_tz(r.tz),
             )
         )
         ids[r.external_id] = run_id
         imported += 1
     await db.commit()
+    if imported:
+        try:
+            await backfill(db, user.id, None)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.exception("report card backfill failed user=%s", user.id)
     return RunImportOut(imported=imported, ids=ids, skipped=skipped)
+
+
+TZ = Annotated[str | None, Query(max_length=64, description="Device IANA time zone")]
+
+
+@app.get("/report-card/current")
+async def report_card_current(user: Authed, db: DB, tz: TZ = None) -> dict[str, object]:
+    """This week's live card, recomputed on every read. No LLM."""
+    ctx = await load_context(db, user.id, tz)
+    this_week = local_week(ctx.now, ctx.tz)
+    week = grade_weeks(ctx, since=this_week).get(this_week)
+    if week is None:
+        return {"card": None}
+    return {"card": card_out(week, ctx.tz)}
+
+
+@app.get("/report-card/latest-closed")
+async def report_card_latest_closed(user: Authed, db: DB, tz: TZ = None) -> dict[str, object]:
+    """Last week's report. The first read after local Monday writes the summary."""
+    ctx = await load_context(db, user.id, tz)
+    last = local_week(ctx.now, ctx.tz) - timedelta(weeks=1)
+    weeks = grade_weeks(ctx, through=last, since=last - timedelta(weeks=1))
+    week = weeks.get(last)
+    if week is None:
+        return {"card": None}
+    card = await close_last_week(db, ctx, weeks, weekly.report_llm_client())
+    await db.commit()
+    return {"card": card_out(week, ctx.tz, card)}
+
+
+@app.get("/report-card/history")
+async def report_card_history(
+    user: Authed, db: DB, tz: TZ = None, weeks: Annotated[int, Query(ge=1, le=52)] = 12
+) -> dict[str, object]:
+    """The last ``weeks`` local weeks, newest first, including this one."""
+    ctx = await load_context(db, user.id, tz)
+    this_week = local_week(ctx.now, ctx.tz)
+    since = this_week - timedelta(weeks=weeks - 1)
+    graded = grade_weeks(ctx, since=since)
+    stored: dict[date, ReportCard] = {
+        c.week_start: c
+        for c in await db.scalars(
+            select(ReportCard).where(ReportCard.user_id == user.id, ReportCard.week_start >= since)
+        )
+    }
+    return {
+        "weeks": [
+            card_out(w, ctx.tz, stored.get(start) if not w.live else None)
+            for start, w in sorted(graded.items(), reverse=True)
+        ]
+    }
 
 
 @app.delete("/runs")

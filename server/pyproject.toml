@@ -14,6 +14,7 @@ dependencies = [
     "httpx==0.28.1",
     "psycopg2-binary==2.9.10",
     "posthog==6.9.3",
+    "tzdata==2025.2",
 ]
 
 [project.optional-dependencies]

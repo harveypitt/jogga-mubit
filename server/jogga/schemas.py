@@ -40,6 +40,7 @@ class RunIn(BaseModel):
     splits: list[Split] = Field(default_factory=list)
     efforts: dict[str, float] = Field(default_factory=dict)
     mode: Literal["plan", "race", "free"] | None = None
+    tz: str | None = Field(default=None, max_length=64)
 
 
 class RunOut(RunIn):
@@ -192,3 +193,23 @@ class TargetIn(BaseModel):
     """Target body."""
 
     target_s: int
+
+
+ReportCategory = Literal["consistency", "pacing", "balance", "load", "progress"]
+
+
+class ReportFocus(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    category: ReportCategory
+    action: str
+
+
+class ReportSummary(BaseModel):
+    """Weekly report-card text. Grades come from the server, never from here."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    headline: str
+    summary: str
+    focus: ReportFocus

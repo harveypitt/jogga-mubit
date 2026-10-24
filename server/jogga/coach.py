@@ -301,12 +301,14 @@ class OpenRouterClient:
         http: httpx.AsyncClient | None = None,
         url: str | None = None,
         extra_headers: dict[str, str] | None = None,
+        response_schema: dict[str, Any] | None = None,
     ) -> None:
         self._api_key = api_key
         self._model = model
         self._http = http
         self._url = url or config.OPENROUTER_URL
         self._extra_headers = extra_headers or {}
+        self._response_schema = response_schema
 
     async def complete(self, system: str, user: str) -> LLMResult:
         if self._http is not None:
@@ -323,7 +325,7 @@ class OpenRouterClient:
         resp = await http.post(
             self._url,
             headers=headers,
-            json=request_body(self._model, system, user),
+            json=request_body(self._model, system, user, self._response_schema),
         )
         if resp.status_code >= 400:
             raise RuntimeError(f"OpenRouter {resp.status_code}: {resp.text[:300]}")
@@ -347,7 +349,9 @@ class OpenRouterClient:
         )
 
 
-def request_body(model: str, system: str, user: str) -> dict[str, Any]:
+def request_body(
+    model: str, system: str, user: str, response_schema: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Chat-completions body: structured outputs, strict providers, usage."""
     body: dict[str, Any] = {
         "model": model,
@@ -356,7 +360,10 @@ def request_body(model: str, system: str, user: str) -> dict[str, Any]:
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        "response_format": {"type": "json_schema", "json_schema": load_response_schema()},
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": response_schema or load_response_schema(),
+        },
         "provider": {"require_parameters": True},
         "usage": {"include": True},
     }
