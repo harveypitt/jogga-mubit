@@ -323,9 +323,30 @@ def test_no_run_too_short_to_be_worth_doing() -> None:
         avg4w_km=8.0,
         typical_km=5.5,
     )
-    assert f.min_km == 3.3
+    assert f.min_km == 3.0  # 20 min at 7:00/km is under 3 km
     # A low-volume week may still add one usual run on top of its average.
     assert f.week_cap == round(8.0 + 5.5 - 6.3, 1)
     sessions = fallback_plan(f)
     assert sessions and all(s["km"] >= f.min_km for s in sessions)
     assert len(sessions) == 1
+
+
+def test_growth_follows_how_runs_felt() -> None:
+    from jogga.planner import growth_factor
+
+    assert growth_factor([], None, False) == 1.10
+    assert growth_factor(["moderate", "easy"], None, False) == 1.30
+    assert growth_factor(["moderate", "easy"], None, True) == 1.25
+    assert growth_factor(["easy", "hard", "max"], None, False) == 1.0
+    assert growth_factor(["hard", "hard", "easy"], None, False) == 1.10
+    assert growth_factor(["easy"], "niggle", False) == 1.0
+    assert growth_factor(["easy"], "sore", False) == 0.75
+    # Comfortable weeks at 8 km may grow to 13.5 km (one usual run more), sore ones shrink.
+    assert mk_facts(avg4w_km=8.0, typical_km=5.5, growth=1.30).week_cap == 13.5
+    assert mk_facts(avg4w_km=8.0, typical_km=5.5, growth=0.75).week_cap == 6.0
+
+
+def test_hard_sessions_stay_near_a_fifth_of_the_week() -> None:
+    raw = plan_json((0, "tempo", 6, "5:20"), (2, "easy", 5, "6:50"), (4, "intervals", 6, "5:00"))
+    with pytest.raises(ValueError, match="over 20%"):
+        check_plan(raw, mk_facts(avg4w_km=30.0))

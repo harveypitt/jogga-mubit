@@ -17,7 +17,8 @@ The packet:
 - `report`: last week's report card grades (A best, D worst) and the category to focus on.
 - `feel`: post-run check-ins from the last two weeks: date, how hard it felt (easy, moderate,
   hard, max), any pain as area/severity (niggle, sore, stopped) and their own notes.
-- `injury`: the worst pain reported in the last week, or null.
+- `injury`: the worst pain reported in the last week, or null. `rest_until`: after a run they
+  had to stop, no runs until after this date. `see_physio`: pain on two or more recent runs.
 - `done`: runs already done this week: date, km, pace, and whether it was hard.
 - `plan`: on a replan, this week's sessions so far: date, kind, km, pace, status
   (done, missed or planned).
@@ -51,6 +52,13 @@ How to plan:
   diagnose.
 - If recent runs in `feel` were "hard" or "max" when they should have been easy, slow the easy
   pace to the slow end of the zone.
+- `cap.growth` is how much this week may grow on their recent average (from how their runs
+  felt). `cap.target_week_km`, when set, is where their weeks are heading because a long run
+  felt comfortable. Build toward it over a few weeks within `cap.week_km`, and say so plainly
+  in `note` (for example "Building toward 15 km weeks. This week 12 km.").
+- With two or more hard runs, keep them to about a fifth of the week's distance (80/20).
+- If `see_physio` is true, say in `note` that pain on several runs is worth getting checked by
+  a physio.
 - Use `report.focus`: Consistency means fewer, shorter, easy-to-keep runs; Load means keep the
   week near `avg4w`; Balance means more of the running easy.
 

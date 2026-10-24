@@ -40,9 +40,23 @@ WEEK_GROWTH = 1.10
 # Longest run and week allowed when there is no recent history to scale from.
 MIN_RUN_CAP_KM = 5.0
 MIN_WEEK_CAP_KM = 10.0
-# Shortest run worth planning: 3 km, or 60% of their usual run if that is longer.
+# Shortest run worth planning: 20 minutes at easy pace, and never under 3 km.
 MIN_SESSION_KM = 3.0
-MIN_SESSION_SHARE = 0.6
+MIN_SESSION_MIN = 20
+# Weekly growth from check-ins (see docs/PLANNER_EVIDENCE.md): big jumps (>~30%) are the
+# risk, not a fixed 10%; hold after a flat-out run or a niggle, cut back with real pain.
+GROWTH_DEFAULT = 1.10
+GROWTH_COMFY = {"beginner": 1.25, "experienced": 1.30}
+GROWTH_HOLD = 1.0
+GROWTH_CUT = 0.75
+# A comfortable long run points at weeks of about 1.5x its length, reached gradually.
+TARGET_FROM_LONG_RUN = 1.5
+# With two or more hard sessions, they may take at most this share of the week's km.
+HARD_SHARE = 0.2
+STOP_REST_DAYS = 2
+STOP_MAX_SESSIONS = 2
+PHYSIO_REPORTS = 2
+RPE = {"easy": 3, "moderate": 5, "hard": 7, "max": 9}
 PACE_TOLERANCE_S = 15
 NO_FIT_EASY_EXTRA_S = 45
 KM_SLACK = 0.05
@@ -50,12 +64,12 @@ WORD_LIMITS = {"note": 25, "change": 20, "detail": 15, "why": 25}
 DEFAULT_RUNS_PER_WEEK = 3
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 # A reported injury cuts the longest run allowed, and any injury rules out hard sessions.
-INJURY_RUN_CAP = {"niggle": 1.0, "sore": 0.75, "stopped": 0.5}
+INJURY_RUN_CAP = {"niggle": 1.0, "sore": 0.7, "stopped": 0.5}
 INJURY_SEVERITY = ("niggle", "sore", "stopped")
 FEEL_DAYS = 14
 INJURY_DAYS = 7
 # Packet keys the LLM sees but analytics never does (health data and free text).
-PRIVATE_KEYS = ("feel", "injury")
+PRIVATE_KEYS = ("feel", "injury", "rest_until", "see_physio")
 
 
 class LLMSession(BaseModel):
@@ -98,6 +112,10 @@ class Facts:
     # Worst injury reported in the last week ("niggle", "sore" or "stopped").
     injury: str | None = None
     feel: list[list[Any]] = field(default_factory=list)
+    growth: float = GROWTH_DEFAULT
+    target_km: float | None = None
+    rest_until: date | None = None
+    see_physio: bool = False
 
     @property
     def run_cap(self) -> float:
@@ -111,13 +129,19 @@ class Facts:
     @property
     def week_cap(self) -> float:
         """km left for the rest of the week."""
-        # 10% growth, but a low-volume runner may always add one usual run.
-        total = max(WEEK_GROWTH * self.avg4w_km, self.avg4w_km + self.typical_km, MIN_WEEK_CAP_KM)
+        if self.growth < GROWTH_HOLD:
+            total = self.growth * self.avg4w_km
+        else:
+            total = max(self.growth * self.avg4w_km, MIN_WEEK_CAP_KM)
+            if self.growth > GROWTH_HOLD:
+                # A low-volume runner may always add one usual run.
+                total = max(total, self.avg4w_km + self.typical_km)
         return round(max(0.0, total - self.done_km), 1)
 
     @property
     def min_km(self) -> float:
-        floor = max(MIN_SESSION_KM, MIN_SESSION_SHARE * self.typical_km)
+        easy = int(self.zones["easy"][1]) if self.zones else self.typical_pace + NO_FIT_EASY_EXTRA_S
+        floor = max(MIN_SESSION_KM, MIN_SESSION_MIN * 60 / easy)
         return round(min(self.run_cap, floor), 1)
 
     @property
@@ -213,7 +237,34 @@ def facts(
             sev = s.injury_severity or "niggle"
             if injury is None or INJURY_SEVERITY.index(sev) > INJURY_SEVERITY.index(injury):
                 injury = sev
+    reports = [s for s in surveys or [] if s.injury]
+    stops = [
+        local_date(started.get(s.run_id, s.created_at), tz)
+        for s in reports
+        if s.injury_severity == "stopped"
+        and started.get(s.run_id, s.created_at) >= now - timedelta(days=INJURY_DAYS)
+    ]
+    rest_until = max(stops) + timedelta(days=STOP_REST_DAYS) if stops else None
+    if rest_until is not None:
+        days_left = [d for d in days_left if d > rest_until]
+    window = [
+        (started.get(s.run_id, s.created_at), s)
+        for s in surveys or []
+        if now - timedelta(days=FEEL_DAYS) <= started.get(s.run_id, s.created_at) <= now
+    ]
+    window.sort(key=lambda p: p[0])
+    feelings = [s.difficulty for _, s in window if s.difficulty]
+    km_of = {r.id: r.distance_m / 1000.0 for r in runs}
+    comfy = [
+        km_of[s.run_id]
+        for s in surveys or []
+        if s.difficulty in ("easy", "moderate") and s.run_id in km_of
+    ]
     return Facts(
+        growth=growth_factor(feelings, injury, beginner),
+        target_km=round(TARGET_FROM_LONG_RUN * max(comfy), 1) if comfy else None,
+        rest_until=rest_until,
+        see_physio=sum(1 for _, s in window if s.injury) >= PHYSIO_REPORTS,
         injury=injury,
         feel=feel,
         today=today,
@@ -231,6 +282,17 @@ def facts(
         fit=fit,
         wk=wk,
     )
+
+
+def growth_factor(feelings: list[str], injury: str | None, beginner: bool) -> float:
+    """How much the week may grow, from recent check-ins (oldest first) and pain."""
+    if injury in ("sore", "stopped"):
+        return GROWTH_CUT
+    if injury == "niggle" or "max" in feelings[-3:]:
+        return GROWTH_HOLD
+    if not feelings or 2 * sum(1 for x in feelings if x in ("hard", "max")) >= len(feelings):
+        return GROWTH_DEFAULT
+    return GROWTH_COMFY["beginner" if beginner else "experienced"]
 
 
 # --- checks ------------------------------------------------------------------
@@ -267,10 +329,16 @@ def _check_hard(sessions: list[dict[str, Any]], f: Facts) -> None:
     for a, b in zip(hard, hard[1:], strict=False):
         if (b - a).days == 1:
             raise ValueError(f"hard days back to back: {a} and {b}")
+    hard_km = sum(float(s["km"]) for s in sessions if s["kind"] in HARD_KINDS)
+    week_km = sum(float(s["km"]) for s in sessions) + f.done_km
+    if len(planned) >= 2 and hard_km > HARD_SHARE * week_km + KM_SLACK:
+        raise ValueError(f"hard sessions are {hard_km:.1f} of {week_km:.1f} km, over 20%")
 
 
 def cap_sessions(f: Facts, budget_count: int | None) -> int:
     n = len(f.days_left)
+    if f.injury == "stopped":
+        n = min(n, STOP_MAX_SESSIONS)
     return n if budget_count is None else min(n, budget_count)
 
 
@@ -334,9 +402,7 @@ def fallback_plan(
 ) -> list[dict[str, Any]]:
     """Rules-only plan: the usual runs, spread out with rest days, mostly easy."""
     days = f.days_left
-    n = f.runs_per_week - len(f.done)
-    if budget_count is not None:
-        n = min(n, budget_count)
+    n = min(f.runs_per_week - len(f.done), cap_sessions(f, budget_count))
     n = min(n, (len(days) + 1) // 2)
     km_left = min(f.week_cap, budget_km) if budget_km is not None else f.week_cap
     while n > 0 and km_left / n < f.min_km - KM_SLACK:
@@ -441,6 +507,8 @@ def plan_packet(
         "report": report,
         "feel": f.feel or None,
         "injury": f.injury,
+        "rest_until": f.rest_until.isoformat() if f.rest_until else None,
+        "see_physio": f.see_physio,
         "done": [
             [d["date"].isoformat(), d["km"], fmt_dur(d["pace"]), "hard" if d["hard"] else "easy"]
             for d in f.done
@@ -452,6 +520,8 @@ def plan_packet(
         "cap": {
             "run_km": f.run_cap,
             "min_km": f.min_km,
+            "target_week_km": f.target_km,
+            "growth": f.growth,
             "week_km": round(week_km, 1),
             "sessions": cap_sessions(f, budget_count),
             "hard": f.hard_cap,
